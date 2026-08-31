@@ -131,11 +131,13 @@ $$;
 
 -- Suggestions for anything still unmatched: same amount + direction, date
 -- within 3 days either way. Shown to a human to confirm or reject.
+-- Suggestions for anything still unmatched: same amount + direction, date
+-- within 3 days either way. Shown to a human to confirm or reject.
 create or replace view public.v_hfms_reconciliation_suggestions as
 select
   bsl.id as statement_line_id, bsl.import_id, bsl.line_date, bsl.amount_kes, bsl.direction, bsl.description,
   ft.id as suggested_transaction_id, ft.transaction_date, ft.description as ledger_description,
-  abs(bsl.line_date - ft.transaction_date) as days_apart
+  abs(bsl.line_date - ft.transaction_date::date) as days_apart
 from public.bank_statement_lines bsl
 join public.bank_statement_imports bsi on bsi.id = bsl.import_id
 join public.financial_transactions ft
@@ -143,9 +145,8 @@ join public.financial_transactions ft
   and ft.is_deleted = false
   and ft.net_amount_kes = bsl.amount_kes
   and ft.direction = bsl.direction
-  and abs(bsl.line_date - ft.transaction_date) <= 3
+  and abs(bsl.line_date - ft.transaction_date::date) <= 3
 where bsl.match_status = 'unmatched';
-
 -- ----------------------------------------------------------------------------
 -- VERIFICATION
 -- ----------------------------------------------------------------------------
