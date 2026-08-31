@@ -1,0 +1,31 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+  command = "npm install"
+
+[build.environment]
+  # Netlify Functions need native fetch (Node 18+) for netlify/functions/ai-assistant.js
+  # to call the Anthropic API without an extra dependency.
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Friendly API paths -> the actual functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Single page app — everything else is served from index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
