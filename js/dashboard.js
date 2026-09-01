@@ -7,7 +7,7 @@ async function loadAlerts(){
   alertsState.loading = true; render();
   try{
     const res = await apiFetch(`/api/automation?branch_id=${state.branchId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load alerts.');
     alertsState.alerts = body.alerts || [];
     alertsState.error = null;
@@ -19,7 +19,7 @@ async function scanForAlerts(){
   alertsState.scanning = true; render();
   try{
     const res = await apiFetch('/api/automation?action=scan', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Scan failed.');
     alertsState.alerts = body.open_alerts || [];
     alertsState.error = null;
@@ -30,7 +30,7 @@ async function scanForAlerts(){
 async function dismissAlert(id){
   try{
     const res = await apiFetch('/api/automation?action=dismiss', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, id }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not dismiss.');
     await loadAlerts();
   }catch(e){ showToast(e.message, 'error'); }

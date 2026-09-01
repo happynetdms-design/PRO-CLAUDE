@@ -403,7 +403,7 @@ const CORE_ENTITY_CONFIG = {
   // that updated balance server-side, so this endpoint doesn't touch it.
   loanPayments: {
     path: '/api/loan-payments',
-    toApi: p => ({ id:p.id, branch_id: state.branchId, loan_id:p.loan_id, payment_date:p.date, amount_kes:Number(p.amount_kes)||0, note:p.note||null })
+    toApi: p => ({ id:p.id, loan_id:p.loan_id, payment_date:p.date, amount_kes:Number(p.amount_kes)||0, note:p.note||null })
   },
   taxObligations: {
     path: '/api/tax',
@@ -463,7 +463,9 @@ async function loadState(preferredBranchId){
   const me = await apiGetMe();
   currentUserEmail = me.user ? me.user.email : currentUserEmail; // always prefer the server-verified email over whatever the session object had
   if(!me.branches || me.branches.length === 0){
-    throw new Error('Your account has no branch access yet — ask an admin to grant you access.');
+    const error = new Error('Your account has no branch access yet — ask an admin to grant you access.');
+    error.code = me.access_pending ? 'ACCESS_PENDING' : 'ACCESS_UNAVAILABLE';
+    throw error;
   }
   availableBranches = me.branches;
   const lastUsed = localStorage.getItem('happynet_last_branch');
@@ -479,7 +481,7 @@ async function loadState(preferredBranchId){
     apiList('/api/loans', branchId),
     apiList('/api/loan-payments', branchId),
     apiList('/api/tax', branchId),
-    apiFetch('/api/settings?branch_id=' + branchId, { method:'GET' }).then(r => r.json()),
+    apiGetSettings(branchId),
     apiGetBranchMisc(branchId)
   ]);
 

@@ -7,6 +7,22 @@ let resetMsg = null;
 let recoveryToken = null; // { accessToken, refreshToken } from a recovery link
 let recoveryMsg = null;
 
+function renderAccessPending(){
+  root().innerHTML = `
+    <div class="login-wrap">
+      <div class="login-panel" style="flex:1;">
+        <div class="login-card">
+          <div class="login-card-icon">${ICON_LOCK}</div>
+          <p class="login-title">Account created successfully</p>
+          <p class="login-sub">Your sign-in is valid. The system is assigning your default branch access automatically. If the dashboard still does not open, sign out and try again.</p>
+          <button class="btn full" style="background:var(--ink); color:#fff;" id="access-pending-signout">Return to sign in</button>
+        </div>
+      </div>
+    </div>`;
+  const signOut = document.getElementById('access-pending-signout');
+  if(signOut) signOut.addEventListener('click', async ()=>{ await apiLogout(); renderLogin(); });
+}
+
 function renderRecovery(){
   root().innerHTML = `
     <div class="login-wrap">
@@ -130,7 +146,7 @@ function renderLogin(errMsg){
           <div class="hint" style="margin:10px 0;">Almost there — check <b>${signupMsg.email}</b> for a confirmation link before signing in.</div>
           <p class="login-foot"><a id="back-to-signin">&larr; Back to sign in</a></p>
           ` : signupMsg && signupMsg.needsAccess ? `
-          <div class="hint" style="margin:10px 0;">Your account was created. An administrator must assign you to a branch before you can open the dashboard.</div>
+          <div class="hint" style="margin:10px 0;">Your account was created. The default Main Branch will be assigned automatically when you sign in.</div>
           <p class="login-foot"><a id="back-to-signin">&larr; Back to sign in</a></p>
           ` : `
           <form id="form-signup" novalidate>
@@ -214,8 +230,22 @@ function renderLogin(errMsg){
     googleBtn.disabled = true;
     googleBtn.innerHTML = 'Redirecting to Google…';
     try{
-      const res = await fetch('/api/google-oauth-start', { method:'GET' });
-      const body = await res.json();
+      const res = await fetch('/api/google-oauth-start', {
+        method:'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      const rawText = await res.text();
+      let body = {};
+      if(rawText){
+        try { body = JSON.parse(rawText); }
+        catch(err){
+          const looksLikeHtml = rawText.trim().startsWith('<');
+          const message = looksLikeHtml
+            ? 'Google sign-in is not available on this server configuration. Please use email and password instead.'
+            : 'Could not start Google sign-in.';
+          throw new Error(message);
+        }
+      }
       if(!res.ok || !body.url) throw new Error(body.error || 'Could not start Google sign-in.');
       window.location.href = body.url; // hands off to Google — this tab navigates away
     }catch(e){
@@ -293,7 +323,13 @@ async function startApp(){
   try{
     await loadState();
   }catch(e){
-    renderLogin(e.message || 'Your session expired — please sign in again.');
+    if(e.code === 'ACCESS_PENDING'){ renderAccessPending(); return; }
+    const msg = String(e && e.message || '');
+    if(msg.includes('Could not load your access') || msg.includes('Could not validate your branch access') || msg.includes('no branch access')){
+      renderLogin();
+      return;
+    }
+    renderLogin(msg || 'Your session expired — please sign in again.');
     return;
   }
   render();

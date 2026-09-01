@@ -26,14 +26,16 @@ function errorPage(message){
 <body><div class="card"><h2>Google sign-in didn't complete</h2><p>${safe}</p><a href="/">Back to sign in</a></div></body></html>`;
 }
 function successPage(session){
-  const sessionLiteral = JSON.stringify(JSON.stringify(session));
+  const sessionLiteral = JSON.stringify(session);
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Signing in… — Happynet</title>
 <style>body{font-family:Inter,system-ui,sans-serif;background:#0F1B2C;color:#EDE7D8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}</style>
 </head><body><div id="msg">Signing you in…</div>
 <script>
   try {
-    localStorage.setItem('happynet_session', ${sessionLiteral});
-    window.location.href = '/';
+    const payload = ${sessionLiteral};
+    localStorage.setItem('happynet_session', JSON.stringify(payload));
+    sessionStorage.setItem('happynet_session', JSON.stringify(payload));
+    window.location.replace('/');
   } catch(e) {
     document.getElementById('msg').textContent = 'Could not complete sign-in: ' + e.message;
   }
@@ -61,10 +63,15 @@ exports.handler = async (event) => {
     // Single-use: delete immediately so the same state can never be replayed.
     await admin.from('oauth_pkce_state').delete().eq('state', state);
 
+    const redirectUri = `${process.env.URL || process.env.DEPLOY_PRIME_URL || `https://${event.headers.host}`}/api/google-oauth-callback`;
     const tokenRes = await fetch(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': process.env.SUPABASE_ANON_KEY },
-      body: JSON.stringify({ auth_code: code, code_verifier: pkceRow.code_verifier })
+      body: JSON.stringify({
+        code,
+        code_verifier: pkceRow.code_verifier,
+        redirect_uri: redirectUri
+      })
     });
     const tokenBody = await tokenRes.json();
     if(!tokenRes.ok || !tokenBody.access_token){
@@ -76,7 +83,8 @@ exports.handler = async (event) => {
       access_token: tokenBody.access_token,
       refresh_token: tokenBody.refresh_token,
       expires_at: tokenBody.expires_at || (Math.floor(Date.now()/1000) + (tokenBody.expires_in || 3600)),
-      user: { id: tokenBody.user.id, email: tokenBody.user.email }
+      token: tokenBody.access_token,
+      user: { id: tokenBody.user && tokenBody.user.id, email: tokenBody.user && tokenBody.user.email }
     };
     return htmlResponse(200, successPage(session));
   }catch(e){

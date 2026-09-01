@@ -7,6 +7,71 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const SESSION_KEY = 'happynet_session';
 const ALLOWED_USER_ROLES = new Set(['owner','finance_manager','accountant','branch_manager','auditor','viewer']);
 
+function waitForAuth(milliseconds){
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function resolveUserAccess(user){
+  const readAccessGrants = async () => {
+    const result = await withAuthTimeout(supabaseClient
+      .from('user_branch_access')
+      .select('branch_id, role, branches(id, name, code)')
+      .eq('user_id', user.id));
+    if(result.error) throw result.error;
+    return (result.data || []).filter(grant =>
+      grant && typeof grant.branch_id === 'string' && ALLOWED_USER_ROLES.has(grant.role)
+    ).map(grant => ({
+      branch_id:grant.branch_id,
+      role:grant.role,
+      name:grant.branches && grant.branches.name,
+      code:grant.branches && grant.branches.code
+    }));
+  };
+
+  let lastError = null;
+  for(let attempt = 0; attempt < 3; attempt++){
+    try{
+      const grants = await readAccessGrants();
+      if(grants.length) return { grants, pending:false };
+    }catch(error){ lastError = error; }
+
+    if(attempt < 2) await waitForAuth(250 * (attempt + 1));
+  }
+
+  try{
+    const defaultBranchResult = await withAuthTimeout(supabaseClient.rpc('ensure_default_branch_access'));
+    if(defaultBranchResult && defaultBranchResult.error){
+      const message = String(defaultBranchResult.error.message || '').toLowerCase();
+      if(!message.includes('does not exist') && !message.includes('no active branch') && !message.includes('authentication is required')){
+        lastError = defaultBranchResult.error;
+      }
+    }
+  }catch(error){ lastError = error; }
+
+  try{
+    const grants = await readAccessGrants();
+    if(grants.length) return { grants, pending:false };
+  }catch(error){ lastError = error; }
+
+  // A missing grant is an authorization state, not a database exception.
+  // If there are no active branches yet, surface the pending-access screen.
+  // Otherwise, a default branch assignment can be provisioned automatically.
+  try{
+    const result = await withAuthTimeout(supabaseClient
+      .from('branches')
+      .select('id, name, code')
+      .eq('is_active', true)
+      .order('created_at', { ascending:true })
+      .limit(1));
+    if(result.error) throw result.error;
+    const branch = (result.data || [])[0] || null;
+    return { grants:[], pending:true, suggestedBranch:branch, queryError:lastError };
+  }catch(error){
+    if(lastError) throw lastError;
+    throw error;
+  }
+}
+
 function getSession(){
   try{
     const fromSession = sessionStorage.getItem(SESSION_KEY);
@@ -130,35 +195,24 @@ async function apiLogin(email, password, remember){
     throw new Error('Sign in did not return a complete authentication session.');
   }
 
-  let grants;
+  let access;
   try{
-    const result = await withAuthTimeout(supabaseClient
-      .from('user_branch_access')
-      .select('branch_id, role')
-      .eq('user_id', user.id));
-    if(result.error) throw result.error;
-    grants = result.data || [];
+    access = await resolveUserAccess(user);
   }catch(error){
     await supabaseClient.auth.signOut({ scope:'local' }).catch(()=>{});
     throw new Error('Could not validate your branch access. Please try again.');
   }
 
-  const validGrants = grants.filter(grant =>
-    grant && typeof grant.branch_id === 'string' && ALLOWED_USER_ROLES.has(grant.role)
-  );
-  if(validGrants.length === 0){
-    await supabaseClient.auth.signOut({ scope:'local' }).catch(()=>{});
-    throw new Error('Your account has no active branch access. Ask an administrator to grant access.');
-  }
-
-  const primaryGrant = validGrants[0];
+  const primaryGrant = access.grants[0];
   const sessionData = {
     access_token: session.access_token,
     refresh_token: session.refresh_token,
     token: session.access_token,
     expires_at: session.expires_at,
-    user: { ...user, role: primaryGrant.role, branch_id: primaryGrant.branch_id },
-    grants: validGrants
+    user: { ...user, ...(primaryGrant || {}) },
+    grants: access.grants,
+    access_pending: access.pending,
+    suggested_branch: access.suggestedBranch || null
   };
   setSession(sessionData, remember);
   return sessionData;
