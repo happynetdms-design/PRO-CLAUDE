@@ -1,0 +1,7 @@
+  /* Phase 5: "Print Monthly Report" reuses the browser's Save-as-PDF —
+     no new library, just hides the app chrome and lets the dashboard
+     content print cleanly. */
+  .no-print, .toolbar, form button, .form-card, [id^="btn-"] { display: none !important; }
+  .main { padding: 0 !important; }
+  .card, .pf-bucket, .kpi { break-inside: avoid; }
+  body { background: #fff !important; }

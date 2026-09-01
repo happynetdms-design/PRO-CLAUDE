@@ -1,0 +1,54 @@
+:root{
+  --ink:#132339;
+  --ink-soft:#3B4B63;
+  --paper:#F5F1E7;
+  --card:#FFFDF8;
+  --gold:#D9A441;
+  --gold-deep:#B9822B;
+  --good:#2F7A5C;
+  --good-soft:#E4EFE8;
+  --alert:#B23A2E;
+  --alert-soft:#F5E4E1;
+  --hair:#DED5C0;
+  --muted:#7A7261;
+  --text:var(--ink);
+  --neutral-soft:var(--neutral-soft);
+  --tone-gold-soft:var(--tone-gold-soft);
+  --tone-navy-soft:var(--tone-navy-soft);
+  --radius:14px;
+  --shadow:0 1px 2px rgba(19,35,57,.04), 0 6px 20px rgba(19,35,59,.06);
+}
+/* Dark mode — only the "light surface" variables change. --ink stays
+   fixed: it's the brand navy used for permanently-dark elements (sidebar,
+   buttons on gold, the narrative card) that were never meant to invert.
+   --text/--ink-soft are the ones that adapt, since those are what body
+   copy and secondary text actually read from. */
+html[data-theme="dark"]{
+  --paper:#0F1B2C;
+  --card:#16243A;
+  --hair:#2A3B54;
+  --muted:#93A0B5;
+  --text:#EDE7D8;
+  --ink-soft:#C7CEDB;
+  --good:#4CAF7D;
+  --good-soft:#16342A;
+  --alert:#E07A6D;
+  --alert-soft:#3A1F1C;
+  --neutral-soft:#22334C;
+  --tone-gold-soft:#3A2E1A;
+  --tone-navy-soft:#1E2B42;
+  --shadow:0 1px 2px rgba(0,0,0,.25), 0 6px 20px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--text);
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.num{font-family:'IBM Plex Mono',monospace; font-weight:500; letter-spacing:-0.01em;}
+h1,h2,h3,.display{font-family:'Fraunces',serif;}
+.app{display:flex; min-height:100vh;}
+

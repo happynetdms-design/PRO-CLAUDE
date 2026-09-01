@@ -49,7 +49,8 @@ exports.handler = async (event) => {
 
     if(data.session){
       // Email confirmation is disabled on this project — the account is
-      // immediately usable. Return the same shape login.js does, so the
+      // immediately usable. Return the same session shape the client auth
+      // service expects, so the
       // frontend can sign them straight in.
       return json(201, {
         access_token: data.session.access_token,
