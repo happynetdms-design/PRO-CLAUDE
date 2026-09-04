@@ -44,7 +44,7 @@ exports.handler = async (event) => {
       admin.from('loans').select('current_balance_kes').eq('branch_id', branchId).eq('is_deleted', false),
       admin.from('v_hfms_ap_aging').select('outstanding_kes, aging_bucket').eq('branch_id', branchId),
       admin.from('allocations').select('bucket, amount_kes, approved_at, period').eq('branch_id', branchId).order('period', { ascending: false }).limit(4),
-      admin.from('v_hfms_trial_balance').select('*')
+      admin.from('v_hfms_trial_balance').select('*').eq('branch_id', branchId)
     ]);
 
     const curTxns = curTxnsRes.data || [], prevTxns = prevTxnsRes.data || [];

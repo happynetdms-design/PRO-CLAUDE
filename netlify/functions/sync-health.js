@@ -14,10 +14,10 @@ const { getAccess } = require('./_lib/rbac');
 // exactly which SQL file still needs to run — not just "something's missing."
 const REQUIRED_TABLES = [
   { table: 'financial_transactions', file: 'hfms_foundation_fix_01_ledger_sync.sql' },
-  { table: 'journal_entries', file: 'hfms_foundation_fix_02_journal_posting.sql (+ hfms_phase12_professional_accounting.sql)' },
-  { table: 'journal_lines', file: 'hfms_foundation_fix_02_journal_posting.sql (+ hfms_phase12_professional_accounting.sql)' },
-  { table: 'chart_of_accounts', file: 'hfms_phase12_professional_accounting.sql' },
-  { table: 'accounting_periods', file: 'hfms_phase12_professional_accounting.sql' },
+  { table: 'journal_entries', file: 'hfms_foundation_fix_00_ledger_core.sql' },
+  { table: 'journal_lines', file: 'hfms_foundation_fix_00_ledger_core.sql' },
+  { table: 'chart_of_accounts', file: 'hfms_foundation_fix_00_ledger_core.sql' },
+  { table: 'accounting_periods', file: 'hfms_foundation_fix_00_ledger_core.sql' },
   { table: 'bills', file: 'hfms_foundation_fix_04_accounts_payable.sql' },
   { table: 'bill_payments', file: 'hfms_foundation_fix_04_accounts_payable.sql' },
   { table: 'bank_statement_imports', file: 'hfms_foundation_fix_05_reconciliation.sql' },

@@ -1,5 +1,5 @@
-// AI Financial Assistant — upgraded to ground on the full ledger built
-// this session (cash position, AP, Profit First allocations), with
+// AI Financial Assistant — deliberately limited to revenue, expenses,
+// ledger accounts, and audit history, with
 // persistent conversation history. Still strictly read-only/advisory:
 // it never proposes or executes an action. That's a real feature in its
 // own right (propose -> human approves -> something executes) and
@@ -32,16 +32,16 @@ async function buildFinancialSummary(admin, branchId){
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const cutoff = sixMonthsAgo.toISOString().slice(0, 10);
 
-  const [revenue, expenses, loans, taxObligations, settings, ledgerAllTime, apAging, recentAllocations] = await Promise.all([
+  const [revenue, expenses, accounts, ledgerEntries, auditRows] = await Promise.all([
     safe(admin.from('revenue_entries').select('entry_date, amount_kes').eq('branch_id', branchId).eq('is_deleted', false).gte('entry_date', cutoff)),
     safe(admin.from('expenses').select('expense_date, amount_kes, charges_kes, category_id, categories(name), owner_funded').eq('branch_id', branchId).eq('is_deleted', false).gte('expense_date', cutoff)),
-    safe(admin.from('loans').select('debt_name, lender, current_balance_kes, min_monthly_payment_kes, status').eq('branch_id', branchId).eq('is_deleted', false)),
-    safe(admin.from('tax_obligations').select('tax_type, applicable, frequency, manual_next_due_date, estimated_amount_kes').eq('branch_id', branchId)),
-    safe(admin.from('profit_first_settings').select('*').eq('branch_id', branchId).maybeSingle().then(r=>({data:[r.data],error:r.error}))),
-    safe(admin.from('financial_transactions').select('direction, net_amount_kes').eq('branch_id', branchId).eq('is_deleted', false)),
-    safe(admin.from('v_hfms_ap_aging').select('outstanding_kes, aging_bucket').eq('branch_id', branchId)),
-    safe(admin.from('allocations').select('period, bucket, amount_kes, approved_at').eq('branch_id', branchId).order('period', { ascending: false }).limit(8))
+    safe(admin.from('chart_of_accounts').select('code, name, account_type, is_active').eq('branch_id', branchId).order('code')),
+    safe(admin.from('financial_transactions').select('transaction_date, transaction_type, direction, net_amount_kes, description').eq('branch_id', branchId).eq('is_deleted', false).gte('transaction_date', cutoff)),
+    safe(admin.from('audit_log').select('table_name, action, changed_at, changed_by, old_data, new_data').in('table_name', ['revenue_entries','expenses']).order('changed_at', { ascending:false }).limit(300))
   ]);
+  const auditLog = (auditRows || []).filter(a =>
+    (a.new_data && a.new_data.branch_id === branchId) || (a.old_data && a.old_data.branch_id === branchId)
+  );
 
   const revenueByMonth = {};
   for(const r of (revenue || [])){
@@ -67,50 +67,22 @@ async function buildFinancialSummary(admin, branchId){
     monthly_expenses_kes: expenseByMonth,
     expenses_by_category_kes: expenseByCategory,
     owner_funded_expenses_kes_total: ownerFundedTotal,
-    loans: (loans || []).map(l => ({
-      name: l.debt_name, lender: l.lender, balance_kes: Number(l.current_balance_kes),
-      min_monthly_payment_kes: Number(l.min_monthly_payment_kes), status: l.status
-    })),
-    tax_obligations: (taxObligations || []).filter(t => t.applicable).map(t => ({
-      type: t.tax_type, frequency: t.frequency, next_due: t.manual_next_due_date, estimated_kes: Number(t.estimated_amount_kes)
-    })),
-    profit_first_settings: settings && settings[0] ? {
-      profit_pct: Number(settings[0].pct_profit), owner_pay_debt_pct: Number(settings[0].pct_owner_debt),
-      tax_pct: Number(settings[0].pct_tax), opex_pct: Number(settings[0].pct_opex),
-      monthly_revenue_target_kes: Number(settings[0].monthly_revenue_target_kes)
-    } : null
+    accounts: accounts || [],
+    ledger_transactions: ledgerEntries || [],
+    audit: (auditLog || []).map(a => ({ table:a.table_name, action:a.action, changed_at:a.changed_at, changed_by:a.changed_by }))
   };
-
-  // Optional, ledger-derived sections — each omitted (not erroring) if that
-  // foundation-fix file hasn't been run against this branch's database yet.
-  if(ledgerAllTime){
-    summary.cash_position_kes = ledgerAllTime.reduce((s,t)=>s+Number(t.net_amount_kes)*(t.direction==='inflow'?1:-1), 0);
-  }
-  if(apAging){
-    summary.accounts_payable = {
-      outstanding_kes: apAging.reduce((s,a)=>s+Number(a.outstanding_kes),0),
-      overdue_kes: apAging.filter(a=>a.aging_bucket!=='current').reduce((s,a)=>s+Number(a.outstanding_kes),0)
-    };
-  }
-  if(recentAllocations && recentAllocations.length){
-    summary.recent_profit_first_allocations = recentAllocations.map(a => ({
-      period: a.period, bucket: a.bucket, amount_kes: Number(a.amount_kes), approved: !!a.approved_at
-    }));
-  }
 
   return summary;
 }
 
-const SYSTEM_PROMPT = `You are Happynet's financial assistant, built on top of its Profit First dashboard and ledger.
+const SYSTEM_PROMPT = `You are Happynet's financial assistant, limited to revenue, expenses, financial ledger accounts, ledger transactions, and audit history.
 
 Rules you must follow:
-1. Answer ONLY using the JSON financial summary provided in each message. Never invent, estimate, or assume a number that isn't in that data. If a section (like accounts_payable or cash_position_kes) is missing from the summary, that data isn't available yet — say so, don't guess at it.
+1. Answer ONLY using the JSON financial summary provided in each message. Never invent, estimate, or assume a number that isn't in that data. If requested information is outside revenue, expenses, accounts, ledger, or audit history, say it is outside your current scope.
 2. Label every substantive claim with one of these, inline: FACT (a number straight from the data), CALCULATION (arithmetic you derived from the data), FORECAST (forward-looking — always state your assumptions), RECOMMENDATION (an action management could consider), or RISK (a concern worth flagging). Keep the labels light — a word in brackets is enough, not a heading for every sentence.
-3. Money that came from the owner/director (loans, e.g. "John") is owner financing, never revenue — and repaying that loan is not an operating expense. Keep this distinction sharp in any answer that touches loans or cash.
-4. Money allocated under Profit First (profit reserve, tax reserve, owner pay) is reserved, not ordinary spendable operating cash — don't suggest spending it as if it were.
-5. Keep answers concise and concrete — use actual KES figures from the data, not vague language.
-6. You are not a licensed accountant or financial advisor; for tax filing specifics or legal obligations, say the user should confirm with KRA or their accountant.
-7. You cannot take any action — you can only explain, calculate, and advise. If asked to do something (post a transaction, approve a bill, close a period), say that's outside what you can do here and point to the right tab in the app.`;
+3. Keep answers concise and concrete — use actual KES figures from the data, not vague language.
+4. You are not a licensed accountant or financial advisor.
+5. You cannot take any action — you can only explain and calculate. If asked to change data, point to the relevant app tab.`;
 
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' });

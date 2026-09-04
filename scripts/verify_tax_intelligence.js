@@ -6,6 +6,7 @@
 const TODAY = new Date('2026-08-19');
 
 function isoDate(d){ return d.toISOString().slice(0,10); }
+function utcDate(year, month, day){ return new Date(Date.UTC(year, month, day)); }
 function daysUntil(s){
   if(!s) return null;
   const b = new Date(`${s}T00:00:00`);
@@ -14,8 +15,8 @@ function daysUntil(s){
 function dueForRule(periodEnd, rule){
   const p = new Date(`${periodEnd}T00:00:00`);
   const r = (rule||'').toLowerCase();
-  if(r.includes('20th day of following month')) return isoDate(new Date(p.getFullYear(), p.getMonth()+1, 20));
-  if(r.includes('9th day of following month')) return isoDate(new Date(p.getFullYear(), p.getMonth()+1, 9));
+  if(r.includes('20th day of following month')) return isoDate(utcDate(p.getUTCFullYear(), p.getUTCMonth()+1, 20));
+  if(r.includes('9th day of following month')) return isoDate(utcDate(p.getUTCFullYear(), p.getUTCMonth()+1, 9));
   return null;
 }
 function status(period){

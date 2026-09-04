@@ -2,14 +2,15 @@ const { requireUser, adminClient, json } = require('./_lib/supabase');
 const { requireBranchAccess } = require('./_lib/rbac');
 
 function isoDate(d){ return d.toISOString().slice(0,10); }
+function utcDate(year, month, day){ return new Date(Date.UTC(year, month, day)); }
 function addDays(date, days){ const d=new Date(date); d.setDate(d.getDate()+days); return d; }
 function startOfMonth(s){ const d=s?new Date(`${s}-01T00:00:00`):new Date(); return new Date(d.getFullYear(),d.getMonth(),1); }
 function endOfMonth(d){ return new Date(d.getFullYear(),d.getMonth()+1,0); }
 function dueForRule(periodEnd, rule){
   const p=new Date(`${periodEnd}T00:00:00`); const r=(rule||'').toLowerCase();
-  if(r.includes('20th day of following month')) return isoDate(new Date(p.getFullYear(),p.getMonth()+1,20));
-  if(r.includes('9th day of following month')) return isoDate(new Date(p.getFullYear(),p.getMonth()+1,9));
-  if(r.includes('30th day of fourth month')) return isoDate(new Date(p.getFullYear(),p.getMonth()+4,30));
+  if(r.includes('20th day of following month')) return isoDate(utcDate(p.getUTCFullYear(),p.getUTCMonth()+1,20));
+  if(r.includes('9th day of following month')) return isoDate(utcDate(p.getUTCFullYear(),p.getUTCMonth()+1,9));
+  if(r.includes('30th day of fourth month')) return isoDate(utcDate(p.getUTCFullYear(),p.getUTCMonth()+4,30));
   return null;
 }
 function daysUntil(s){ if(!s)return null; const a=new Date(); const b=new Date(`${s}T00:00:00`); return Math.ceil((b-new Date(a.getFullYear(),a.getMonth(),a.getDate()))/86400000); }

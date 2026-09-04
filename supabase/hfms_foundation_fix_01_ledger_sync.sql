@@ -31,6 +31,42 @@
 -- journal_lines), which are currently empty and unused.
 -- ============================================================================
 
+create table if not exists public.financial_transactions (
+  id                    uuid primary key default gen_random_uuid(),
+  branch_id             uuid not null references public.branches(id) on delete cascade,
+  transaction_date      date not null,
+  transaction_type      text not null,
+  direction             text not null check (direction in ('inflow','outflow')),
+  gross_amount_kes      numeric(14,2) not null default 0 check (gross_amount_kes >= 0),
+  charges_kes           numeric(14,2) not null default 0 check (charges_kes >= 0),
+  net_amount_kes        numeric(14,2) not null check (net_amount_kes >= 0),
+  account_id            uuid references public.financial_accounts(id),
+  category_id           uuid references public.categories(id),
+  revenue_entry_id      uuid references public.revenue_entries(id),
+  expense_id            uuid references public.expenses(id),
+  loan_id               uuid references public.loans(id),
+  source_system         text not null,
+  source_ref            text not null,
+  external_ref          text,
+  counterparty          text,
+  description           text,
+  classification_status text not null default 'classified',
+  raw_data              jsonb not null default '{}'::jsonb,
+  is_deleted            boolean not null default false,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now(),
+  unique (branch_id, source_system, source_ref)
+);
+create index if not exists idx_financial_transactions_branch_date
+  on public.financial_transactions(branch_id, transaction_date);
+create index if not exists idx_financial_transactions_type
+  on public.financial_transactions(branch_id, transaction_type, is_deleted);
+
+alter table public.financial_transactions enable row level security;
+drop policy if exists "financial transactions read" on public.financial_transactions;
+create policy "financial transactions read" on public.financial_transactions for select to authenticated
+  using (public.is_head_office() or public.has_branch_role(branch_id, array['branch_manager','accountant','auditor','viewer']::public.user_role[]));
+
 -- ----------------------------------------------------------------------------
 -- 1. SYNC: revenue_entries -> financial_transactions
 -- ----------------------------------------------------------------------------

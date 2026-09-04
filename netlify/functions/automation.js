@@ -61,7 +61,7 @@ exports.handler = async (event) => {
         safe(admin.from('financial_transactions').select('direction, net_amount_kes').eq('branch_id', branchId).eq('is_deleted', false)),
         safe(admin.from('financial_transactions').select('transaction_type, direction, net_amount_kes').eq('branch_id', branchId).eq('is_deleted', false).gte('transaction_date', monthStartStr).lte('transaction_date', today)),
         safe(admin.from('v_hfms_ap_aging').select('outstanding_kes, aging_bucket').eq('branch_id', branchId)),
-        safe(admin.from('v_hfms_trial_balance').select('*'))
+        safe(admin.from('v_hfms_trial_balance').select('*').eq('branch_id', branchId))
       ]);
 
       let scanned = 0, raised = 0;

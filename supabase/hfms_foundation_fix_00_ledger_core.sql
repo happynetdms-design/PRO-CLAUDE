@@ -100,7 +100,7 @@ select
   coalesce(sum(jl.debit_kes), 0) - coalesce(sum(jl.credit_kes), 0) as balance_kes
 from public.chart_of_accounts coa
 left join public.journal_lines jl on jl.account_id = coa.id
-left join public.journal_entries je on je.id = jl.journal_entry_id and je.status = 'posted'
+join public.journal_entries je on je.id = jl.journal_entry_id and je.status = 'posted'
 group by coa.branch_id, coa.id, coa.code, coa.name, coa.account_type;
 
 -- ----------------------------------------------------------------------------

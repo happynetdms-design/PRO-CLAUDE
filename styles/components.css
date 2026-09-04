@@ -7,6 +7,8 @@
 .card.kpi{position:relative; overflow:hidden;}
 .card.kpi:hover{box-shadow:0 2px 4px rgba(19,35,57,.05), 0 14px 28px rgba(19,35,57,.09); transform:translateY(-1px);}
 .card h3{margin:0 0 4px; font-size:12.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; font-family:'Inter';}
+.card input, .card textarea{color:var(--text); caret-color:var(--text); -webkit-text-fill-color:var(--text);}
+.card input::placeholder, .card textarea::placeholder{color:var(--muted); opacity:1;}
 .kpi-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;}
 .kpi-icon{
   width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
