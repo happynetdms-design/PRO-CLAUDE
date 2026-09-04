@@ -8,7 +8,6 @@ const endpoints = [
   { method: 'GET', path: '/api/me', desc: 'User info' },
   { method: 'POST', path: '/api/signup', desc: 'Signup endpoint' },
   { method: 'GET', path: '/api/branches', desc: 'Branches list' },
-  { method: 'GET', path: '/api/google-oauth-start', desc: 'Google OAuth start' }
 ];
 const apiPort = process.env.API_PORT || process.env.PORT || '4173';
 const apiBaseUrl = `http://localhost:${apiPort}`;

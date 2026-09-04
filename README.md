@@ -16,10 +16,7 @@ reference, but this file is the current, authoritative picture.
 Single-file frontend (`index.html`) on Netlify, all auth and data access
 routed through Netlify Functions, storage and auth on Supabase. **The
 browser never talks to Supabase directly and never holds a Supabase key** —
-every request goes `browser → Netlify Function → Supabase`. The one
-deliberate, carefully-built exception is Google sign-in, which still never
-exposes a key to the browser — see `netlify/functions/google-oauth-start.js`'s
-comments for exactly how.
+every request goes `browser → Netlify Function → Supabase`.
 
 ```
 happynet-finance/
@@ -45,7 +42,7 @@ header comment states its real dependencies; this list matches those.
 3. `rls_policies_complete.sql` — row-level security for the base schema
 4. `branch_misc_state.sql` — per-branch misc state (Profit First settings history, etc.)
 5. `hfms_foundation_fix_00_ledger_core.sql` — **chart of accounts, journal entries/lines, accounting periods, the trial balance view.** Referenced constantly by everything below; run this before fix_02 or later steps will fail outright.
-6. `hfms_foundation_fix_01_ledger_sync.sql` through `_18_oauth_pkce.sql`, **in numeric order** — each is self-contained with its own "why" and its own verification queries in a trailing comment block.
+6. `hfms_foundation_fix_01_ledger_sync.sql` through `_17_*.sql`, **in numeric order** — each is self-contained with its own "why" and its own verification queries in a trailing comment block.
 7. Per branch, once: `select public.hfms_seed_chart_of_accounts('<branch id>');` then `select public.hfms_post_all_unposted_transactions();`
 8. Confirm: `select sum(total_debit_kes) - sum(total_credit_kes) from v_hfms_trial_balance;` — must equal `0`.
 
@@ -57,7 +54,6 @@ tooling may still reference — it is not part of the current data model.
 
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY` — powers the AI Assistant, document intelligence (receipt/invoice/statement extraction), and the dashboard narrative
-- Google sign-in additionally requires the Google provider configured under Supabase → Authentication → Providers, with `https://<your-site>/` added to Supabase Auth URL Configuration as an allowed redirect URL
 
 For local Vite development, put the server variables in `.env.local` as well
 as the `VITE_` browser variables. `SUPABASE_SERVICE_ROLE_KEY` is required for

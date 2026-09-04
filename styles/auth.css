@@ -88,15 +88,6 @@
 .login-row-between a{color:#6f5a2a; font-weight:700; text-decoration:underline; text-underline-offset:2px;}
 .login-row-between a:hover{text-decoration:none; opacity:.9;}
 .btn.full{box-sizing:border-box; width:100%; justify-content:center; margin-top:22px; display:flex; align-items:center; gap:8px; margin-left:auto; margin-right:auto; min-height:46px; border-radius:8px; letter-spacing:.02em;}
-.login-divider{display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em;}
-.login-divider i{flex:1; height:1px; background:var(--hair);}
-.btn.google{
-  box-sizing:border-box; width:100%; background:linear-gradient(180deg, #ffffff 0%, #f7f3eb 100%); border:1px solid #d9d0b8;
-  color:#1C2C3E; font-weight:700; font-size:13.5px; display:flex; align-items:center; justify-content:center;
-  gap:10px; padding:12px; border-radius:10px; cursor:pointer; margin:0 auto; box-shadow:0 2px 0 rgba(14,23,34,.04);
-}
-.btn.google:hover{background:linear-gradient(180deg, #f5f2ea 0%, #efe9dc 100%); border-color:#cabd97;}
-.btn.google svg{width:16px; height:16px; flex-shrink:0;}
 .login-foot{margin-top:20px; font-size:12.5px; color:var(--muted); text-align:center;}
 .login-foot a{color:var(--gold-deep); font-weight:600; cursor:pointer;}
 @media (max-width:880px){

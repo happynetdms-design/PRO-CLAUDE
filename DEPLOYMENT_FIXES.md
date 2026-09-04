@@ -14,20 +14,7 @@
 
 ---
 
-### 2. **Google Sign-In Button & OAuth Flow**
-**Fixes**:
-- Enhanced Google button styling to match the app's brand palette
-- Fixed `google-oauth-callback.js` to:
-  - Store proper session object (not double-stringified)
-  - Include `redirect_uri` in token exchange
-  - Redirect to dashboard with `window.location.replace('/')`
-- Improved error handling for unexpected HTML responses
-
-**Result**: Users who sign in with Google are now redirected to the main dashboard.
-
----
-
-### 3. **User Access & Onboarding**
+### 2. **User Access & Onboarding**
 **Fixes**:
 - Auto-assigns "Main Branch" as default branch to new users via `ensure_default_branch_access()` SQL function
 - Silenced confusing "Could not load your access" error messages
@@ -37,7 +24,7 @@
 
 ---
 
-### 4. **API Error Resilience**
+### 3. **API Error Resilience**
 **Fixes**:
 - Added `safeParseJson()` helper in `js/api.js` to handle HTML error responses gracefully
 - Updated critical API call paths (dashboard, assistant) to use safe parser
@@ -54,10 +41,6 @@
 - [ ] Ensure Node 20 is set in build environment
 - [ ] Confirm functions bundler is esbuild
 - [ ] Deploy and test API endpoints via `/api/me`, `/api/branches`, etc.
-- [ ] Verify Google OAuth environment variables are set:
-  - `SUPABASE_URL`
-  - `SUPABASE_ANON_KEY`
-  - `URL` or `DEPLOY_PRIME_URL` (for callback)
 
 ### For Local Development
 - [ ] Run `npm install` to install dependencies
@@ -67,8 +50,6 @@
 - [ ] Test: `node scripts/verify_api_routing.js` (requires Vite running on http://localhost:4173)
 
 ### For Supabase Setup
-- [ ] Enable Google OAuth Provider in Supabase Auth settings
-- [ ] Add `https://your-domain/` to Supabase Auth URL Configuration as an allowed redirect URL
 - [ ] Run `supabase/ensure_default_access.sql` to enable auto-branch-assignment function
 
 ---
@@ -78,9 +59,8 @@
 ### Manual Tests
 1. **API Routing**: Visit `/api/me` in your browser (should return JSON, not HTML)
 2. **Sign In**: Use email/password to confirm auth flow works
-3. **Google Sign-In**: Click Google button and verify redirect to dashboard
-4. **New User**: Create account and confirm Main Branch is auto-assigned
-5. **Branch Access**: Verify you can see data without "ask an admin" error
+3. **New User**: Create account and confirm Main Branch is auto-assigned
+4. **Branch Access**: Verify you can see data without "ask an admin" error
 
 ### Automated Tests
 ```bash
@@ -88,7 +68,7 @@
 node scripts/verify_api_routing.js
 
 # Syntax check
-node --check js/api.js js/auth.js js/dashboard.js netlify/functions/google-oauth-callback.js
+node --check js/api.js js/auth.js js/dashboard.js
 ```
 
 ---
@@ -97,9 +77,7 @@ node --check js/api.js js/auth.js js/dashboard.js netlify/functions/google-oauth
 - `netlify.toml` - Fixed redirect order
 - `js/api.js` - Added safeParseJson() helper
 - `js/dashboard.js` - Use safe parser for alerts
-- `js/auth.js` - Improved Google sign-in error handling, updated login messaging
-- `styles/auth.css` - Enhanced Google button branding
-- `netlify/functions/google-oauth-callback.js` - Fixed session storage and redirect
+- `styles/auth.css` - Login page styling
 - `supabase/ensure_default_access.sql` - Enhanced to create Main Branch if needed
 
 ---
@@ -111,12 +89,6 @@ node --check js/api.js js/auth.js js/dashboard.js netlify/functions/google-oauth
 2. Verify the dev server/deployment is using the updated config
 3. Clear browser cache and rebuild
 4. Check Network tab in DevTools - API response should show `Content-Type: application/json`, not `text/html`
-
-### Google sign-in button not working?
-1. Verify Supabase Google OAuth provider is enabled
-2. Check that `oauth_pkce_state` table exists in Supabase
-3. Confirm callback URL is registered in Google Cloud Console
-4. Check browser console for specific error messages
 
 ### Users still getting "ask an admin to grant access"?
 1. Run `supabase/ensure_default_access.sql` on your Supabase project

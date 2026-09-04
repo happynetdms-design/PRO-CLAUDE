@@ -178,8 +178,6 @@ function renderLogin(errMsg){
             <button class="btn full" style="background:var(--ink); color:#fff;" type="submit">${ICON_LOCK_SM_WHITE}Sign In</button>
             ${errMsg ? `<div class="err-msg" style="margin-top:12px;">${errMsg}</div>` : ''}
           </form>
-          <div class="login-divider"><i></i>or<i></i></div>
-          <button type="button" class="btn google" id="google-signin">${ICON_GOOGLE}Sign in with Google</button>
           <p class="login-foot">Don't have an account? <a id="go-to-signup">Create Account</a></p>
           `}
         </div>
@@ -216,26 +214,6 @@ function renderLogin(errMsg){
   if(goToSignup) goToSignup.addEventListener('click', (e)=>{
     e.preventDefault();
     loginSignupMode = true; signupMsg = null; renderLogin();
-  });
-  const googleBtn = document.getElementById('google-signin');
-  if(googleBtn) googleBtn.addEventListener('click', async ()=>{
-    const originalHtml = googleBtn.innerHTML;
-    googleBtn.disabled = true;
-    googleBtn.innerHTML = 'Redirecting to Google…';
-    try{
-      const response = await withAuthTimeout(fetch('/api/google-oauth-start', {
-        headers:{ Accept:'application/json' }
-      }));
-      const body = await response.json().catch(()=>({}));
-      if(!response.ok || !body.url){
-        throw new Error(body.error || 'Google sign-in is not fully configured yet.');
-      }
-      window.location.assign(body.url);
-    }catch(e){
-      googleBtn.disabled = false;
-      googleBtn.innerHTML = originalHtml;
-      renderLogin(authErrorMessage(e));
-    }
   });
   const backToSignin = document.getElementById('back-to-signin');
   if(backToSignin) backToSignin.addEventListener('click', (e)=>{

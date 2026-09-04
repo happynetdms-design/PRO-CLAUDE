@@ -129,9 +129,6 @@ function authErrorMessage(error){
   if(code.includes('timeout') || message.includes('timeout') || message.includes('network') || message.includes('failed to fetch')){
     return 'We could not reach authentication right now. Check your connection and try again.';
   }
-  if(message.includes('provider is not enabled') || message.includes('unsupported provider') || message.includes('google')){
-    return 'Google sign-in is not enabled yet. Enable Google under Supabase Authentication → Providers.';
-  }
   return error && error.message ? error.message : 'Sign in failed. Please try again.';
 }
 
