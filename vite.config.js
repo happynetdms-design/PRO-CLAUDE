@@ -3,6 +3,16 @@ const path = require('path');
 const { loadEnv } = require('vite');
 
 const functionsDir = path.resolve(__dirname, 'netlify/functions');
+const runtimeScriptsDir = path.resolve(__dirname, 'js');
+
+function copyRuntimeScripts(){
+  return {
+    name:'copy-runtime-scripts',
+    closeBundle(){
+      fs.cpSync(runtimeScriptsDir, path.resolve(__dirname, 'dist/js'), { recursive:true });
+    }
+  };
+}
 
 function readBody(req){
   return new Promise((resolve, reject) => {
@@ -71,5 +81,5 @@ module.exports = ({ mode }) => {
   process.env.SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   process.env.URL = process.env.URL || 'http://localhost:4173';
-  return { plugins: [localApi()] };
+  return { plugins: [localApi(), copyRuntimeScripts()] };
 };
