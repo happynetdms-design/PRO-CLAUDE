@@ -125,6 +125,7 @@ function viewExpenses(){
         <div class="import-summary">
           <div><span class="tag good">${importResult.imported} imported</span></div>
           ${importResult.skippedDupe ? `<div><span class="tag neutral">${importResult.skippedDupe} skipped — duplicate Txn Ref</span></div>` : ''}
+          ${importResult.skippedFiltered ? `<div><span class="tag neutral">${importResult.skippedFiltered} skipped — internal Tende transfer</span></div>` : ''}
           ${importResult.skippedInvalid ? `<div><span class="tag alert">${importResult.skippedInvalid} skipped — missing/invalid data</span></div>` : ''}
         </div>
         ${importResult.errors.length ? `<details style="margin-top:8px;"><summary style="cursor:pointer; color:var(--muted); font-size:12.5px;">Show skipped rows</summary><ul style="font-size:12.5px; color:var(--ink-soft);">${importResult.errors.map(e=>`<li>${e}</li>`).join('')}</ul></details>` : ''}
@@ -224,50 +225,117 @@ function extractTendeVendor(statusMessage, remark, receiver){
   }
   return receiver ? String(receiver).replace(/^="?|"?$/g, '') : (remark || '');
 }
+
+function parseTendeDate(value){
+  if(value instanceof Date) return value;
+  const raw = String(value || '').trim().split(' ')[0];
+  const dmy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if(dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), 12);
+  return new Date(raw);
+}
+
+function tendeHeaderKey(value){
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function isInternalTendeTransfer(row, idx){
+  const values = [idx.service, idx.account, idx.details, idx.receiver, idx.name, idx.otherParty, idx.remark]
+    .map(column => String(row[column] || '').trim().toUpperCase()).filter(Boolean);
+  const text = values.join(' ');
+  return values.some(value => value === 'SND_TENDE') ||
+    /WALLET\s*[- ]?TO\s*WALLET|INTERNAL\s+(TRANSFER|ACCOUNT)|ACCOUNT\s*[- ]?TO\s*ACCOUNT|OWN\s+ACCOUNT|T ENDE\s+TO\s+TENDE|TEND[E]?\s+TO\s+TEND[E]?|ORGANIZATION\s+SETTLEMENT\s+ACCOUNT|UTILITY\s+ACCOUNT\s+TO\s+ORGANIZATION/i.test(text);
+}
+
 // Detects and parses Happynet's raw Tende "payments report" export
 // directly — no manual pre-processing into the simplified layout needed.
 // Two things it deliberately does that a naive import wouldn't:
-//   1. Drops SND_TENDE rows — these are transfers between Happynet's own
+//   1. Drops SND_TENDE and other internal account-move rows — these are transfers between Happynet's own
 //      Tende sub-wallets (Overall -> Payroll, -> Inventory, etc.), not
 //      real money leaving the business. Importing them would double-count
 //      every shilling: once as an internal transfer, again as the real
 //      external payment it eventually funds.
-//   2. Only imports STATUS = SUCCESS rows.
+//   2. Only imports successful/completed rows.
 function parseRawTendeGrid(grid){
-  const header = (grid[0]||[]).map(c=>String(c||'').trim().toUpperCase());
-  const need = ['DATE INITIATED','SERVICE','STATUS','REF NO','AMOUNT'];
-  if(!need.every(h=>header.includes(h))) return null; // not this format — let the caller fall through
-  const col = name => header.indexOf(name);
+  let headerRow = -1;
+  let header = [];
+  for(let rowIndex = 0; rowIndex < Math.min(grid.length, 30); rowIndex++){
+    const candidate = (grid[rowIndex] || []).map(tendeHeaderKey);
+    const hasDate = candidate.includes('DATEINITIATED') || candidate.includes('COMPLETIONTIME');
+    const hasRef = candidate.includes('REF') || candidate.includes('REFNO') || candidate.includes('RECEIPTNO');
+    const hasPayment = candidate.includes('AMOUNT') || candidate.includes('WITHDRAWN');
+    if(hasDate && hasRef && hasPayment && candidate.includes('STATUS')){
+      headerRow = rowIndex;
+      header = candidate;
+      break;
+    }
+  }
+  if(headerRow < 0) return null; // not this format — let the caller fall through
+  const col = (...names) => {
+    for(const name of names){
+      const index = header.indexOf(name);
+      if(index >= 0) return index;
+    }
+    return -1;
+  };
   const idx = {
-    dateInit: col('DATE INITIATED'), dateAppr: col('DATE APPROVED'), account: col('ACCOUNT'),
-    service: col('SERVICE'), amount: col('AMOUNT'), charge: col('CHARGE'), receiver: col('RECEIVER'),
-    remark: col('REMARK'), refNo: col('REF NO'), status: col('STATUS'), statusMsg: col('STATUS MESSAGE')
+    dateInit: col('DATEINITIATED', 'COMPLETIONTIME', 'INITIATIONTIME'),
+    dateAppr: col('DATEAPPROVED', 'COMPLETIONTIME'),
+    account: col('ACCOUNT', 'ACNO'), service: col('SERVICE'),
+    amount: col('AMOUNT', 'WITHDRAWN', 'PAIDIN'), charge: col('CHARGE'),
+    receiver: col('RECEIVER', 'OTHERPARTYINFO'), name: col('NAME'),
+    details: col('DETAILS'), otherParty: col('OTHERPARTYINFO'),
+    remark: col('REMARK'), refNo: col('REFNO', 'REF', 'RECEIPTNO'),
+    status: col('STATUS'), statusMsg: col('STATUSMESSAGE')
   };
   const rows = [];
   let skippedInternal = 0, skippedFailed = 0;
-  for(let r=1; r<grid.length; r++){
+  for(let r=headerRow + 1; r<grid.length; r++){
     const row = grid[r]; if(!row || row.every(c=>c===null||c==='')) continue;
     const status = String(row[idx.status]||'').trim().toUpperCase();
-    if(status !== 'SUCCESS'){ skippedFailed++; continue; }
+    if(!['SUCCESS','COMPLETED','COMPLETE','POSTED','SETTLED'].includes(status)){ skippedFailed++; continue; }
     const service = String(row[idx.service]||'').trim().toUpperCase();
-    if(service === 'SND_TENDE'){ skippedInternal++; continue; }
+    if(isInternalTendeTransfer(row, idx)){ skippedInternal++; continue; }
     const rawDate = row[idx.dateAppr] || row[idx.dateInit];
-    const dateObj = rawDate instanceof Date ? rawDate : new Date(String(rawDate).split(' ')[0]);
+    const dateObj = parseTendeDate(rawDate);
     if(isNaN(dateObj)) { skippedFailed++; continue; }
     const tendeWallet = String(row[idx.account]||'').replace(/\s*\(KOC\d+\)/i,'').trim();
     const amount = Number(String(row[idx.amount]||'0').replace(/[^0-9.\-]/g,'')) || 0;
     const charges = Number(String(row[idx.charge]||'0').replace(/[^0-9.\-]/g,'')) || 0;
+    const remark = String(row[idx.remark] || row[idx.details] || '').trim();
+    const receiver = String(row[idx.name] || row[idx.receiver] || '').trim();
     rows.push({
       date: dateObj.toISOString().slice(0,10),
       txn_ref: String(row[idx.refNo]||'').trim(),
       account_used: service === 'SEND BANK' ? 'Bank Account' : 'M-Pesa Till',
-      category: guessTendeCategory(row[idx.remark], tendeWallet),
-      description: String(row[idx.remark]||''),
-      paid_to: extractTendeVendor(row[idx.statusMsg], row[idx.remark], row[idx.receiver]),
-      amount_kes: amount, charges_kes: charges, owner_funded: false
+      category: guessTendeCategory(remark, tendeWallet),
+      description: remark,
+      paid_to: extractTendeVendor(row[idx.statusMsg], remark, receiver),
+      amount_kes: Math.abs(amount), charges_kes: Math.abs(charges), owner_funded: false
     });
   }
   return { rows, skippedInternal, skippedFailed };
+}
+
+async function persistTendeExpenses(rows){
+  const response = await apiFetch('/api/expenses', {
+    method:'POST', headers:JSONH,
+    body:JSON.stringify({
+      branch_id:state.branchId,
+      entries:rows.map(row => ({
+        expense_date:row.date, txn_ref:row.txn_ref, account_name:row.account_used,
+        category_name:row.category || 'Other', description:row.description || null,
+        paid_to:row.paid_to || null, amount_kes:row.amount_kes,
+        charges_kes:row.charges_kes || 0, owner_funded:false, source:'tende_import'
+      }))
+    })
+  });
+  const body = await safeParseJson(response);
+  if(!response.ok) throw new Error(body.error || 'Could not import expenses.');
+  return {
+    insertedRows:(body.inserted || []).map((item, index) => ({ ...rows[index], id:item.id })),
+    skippedDupe:(body.skipped || []).filter(item => String(item.reason || '').toLowerCase().includes('duplicate')).length,
+    errors:(body.skipped || []).filter(item => !String(item.reason || '').toLowerCase().includes('duplicate')).map(item => item.reason)
+  };
 }
 
 async function handleExpenseImport(ev){
@@ -288,15 +356,16 @@ async function handleExpenseImport(ev){
     const rawTende = parseRawTendeGrid(grid);
     if(rawTende){
       let imported=0, skippedDupe=0; const errors=[];
-      if(rawTende.skippedInternal) errors.push(`${rawTende.skippedInternal} internal Tende wallet transfer(s) (SND_TENDE) correctly excluded — not real expenses.`);
-      const seenRefs = new Set(state.expenses.map(e=>e.txn_ref.toLowerCase()));
+      if(rawTende.skippedInternal) errors.push(`${rawTende.skippedInternal} internal Tende account transfer(s) correctly excluded — not real expenses.`);
+      const seenRefs = new Set(state.expenses.map(e=>String(e.txn_ref || '').toLowerCase()).filter(Boolean));
       const newRows = [];
       for(const r of rawTende.rows){
-        if(!r.txn_ref || seenRefs.has(r.txn_ref.toLowerCase())){
+        const refKey = String(r.txn_ref || '').toLowerCase();
+        if(!refKey || seenRefs.has(refKey)){
           skippedDupe++; continue;
         }
         newRows.push({ id:uid(), ...r });
-        seenRefs.add(r.txn_ref.toLowerCase());
+        seenRefs.add(refKey);
         imported++;
       }
       newRows.sort((a,b)=>a.date<b.date?-1:1);
@@ -305,11 +374,10 @@ async function handleExpenseImport(ev){
       if(newRows.length){
         if(statusEl) statusEl.innerHTML = `<span class="hint">Saving ${newRows.length} rows…</span>`;
         try{
-          const entries = newRows.map(CORE_ENTITY_CONFIG.expenses.toApi);
-          const apiResult = await apiCreate('/api/expenses', { branch_id: state.branchId, entries });
-          const insertedIds = new Set((apiResult.inserted||[]).map(x=>x.id));
-          confirmedRows = newRows.filter(r=>insertedIds.has(r.id));
-          for(const skip of (apiResult.skipped||[])){ skippedDupe++; errors.push(skip.reason || 'A row was skipped by the server.'); }
+          const result = await persistTendeExpenses(newRows);
+          confirmedRows = result.insertedRows;
+          skippedDupe += result.skippedDupe;
+          errors.push(...result.errors);
         }catch(err){
           importResult = {imported:0, skippedDupe, skippedInvalid:rawTende.skippedFailed, errors:[...errors, 'Save failed: '+err.message]};
           if(statusEl) statusEl.innerHTML=''; render(); ev.target.value=''; return;
@@ -317,7 +385,7 @@ async function handleExpenseImport(ev){
       }
       state.expenses = state.expenses.concat(confirmedRows);
       if(lastSynced) lastSynced.expenses = JSON.parse(JSON.stringify(state.expenses));
-      importResult = { imported: confirmedRows.length, skippedDupe, skippedInvalid: rawTende.skippedFailed, errors };
+      importResult = { imported: confirmedRows.length, skippedDupe, skippedInvalid: rawTende.skippedFailed, skippedFiltered: rawTende.skippedInternal, errors };
       render();
       ev.target.value = '';
       return;
@@ -359,7 +427,7 @@ async function handleExpenseImport(ev){
     }
 
     let imported=0, skippedDupe=0, skippedInvalid=0; const errors=[];
-    const seenRefs = new Set(state.expenses.map(e=>e.txn_ref.toLowerCase()));
+    const seenRefs = new Set(state.expenses.map(e=>String(e.txn_ref || '').toLowerCase()).filter(Boolean));
     const newRows = [];
     for(let r=headerRowIdx+1;r<grid.length;r++){
       const row = grid[r]||[];
@@ -404,14 +472,10 @@ async function handleExpenseImport(ev){
     if(newRows.length){
       if(statusEl) statusEl.innerHTML = `<span class="hint">Saving ${newRows.length} rows…</span>`;
       try{
-        const entries = newRows.map(CORE_ENTITY_CONFIG.expenses.toApi);
-        const apiResult = await apiCreate('/api/expenses', { branch_id: state.branchId, entries });
-        const insertedIds = new Set((apiResult.inserted||[]).map(x=>x.id));
-        confirmedRows = newRows.filter(r=>insertedIds.has(r.id));
-        for(const skip of (apiResult.skipped||[])){
-          skippedDupe++;
-          errors.push(skip.reason || 'A row was skipped by the server.');
-        }
+        const result = await persistTendeExpenses(newRows);
+        confirmedRows = result.insertedRows;
+        skippedDupe += result.skippedDupe;
+        errors.push(...result.errors);
       }catch(err){
         importResult = {imported:0, skippedDupe, skippedInvalid, errors:[...errors, 'Save failed: '+err.message]};
         if(statusEl) statusEl.innerHTML='';

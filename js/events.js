@@ -44,10 +44,6 @@ function wireTab(){
     if(state.closedMonths.includes(monthKey(date))){
       errEl.innerHTML = `<div class="err-msg">This date belongs to ${monthLabel(monthKey(date))}, which is already closed.</div>`; return;
     }
-    const dupe = state.dailyRevenue.find(r=>r.date===date && r.id!==editingRevenueId);
-    if(dupe){
-      errEl.innerHTML = `<div class="err-msg">A revenue entry already exists for ${date}. Edit or delete it first — duplicates aren't allowed.</div>`; return;
-    }
     if(editingRevenueId){
       const rec = state.dailyRevenue.find(r=>r.id===editingRevenueId);
       if(rec){ rec.date=date; rec.revenue_kes=revenue_kes; rec.notes=notes; }

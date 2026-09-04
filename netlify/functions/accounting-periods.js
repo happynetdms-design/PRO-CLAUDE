@@ -4,9 +4,7 @@
 // Same role restriction as Profit First settings — this is a Head
 // Office/Branch Manager action, not a routine accountant one.
 const { requireUser, adminClient, json } = require('./_lib/supabase');
-const { requireBranchAccess } = require('./_lib/rbac');
-
-const PERIOD_MANAGER_ROLES = ['owner', 'finance_manager', 'branch_manager'];
+const { requireBranchAccess, roleAllows } = require('./_lib/rbac');
 
 exports.handler = async (event) => {
   const admin = adminClient();
@@ -84,7 +82,7 @@ exports.handler = async (event) => {
       return json(200, { periods: data });
     }
 
-    if(!ctx.access.isHeadOffice && !PERIOD_MANAGER_ROLES.includes(ctx.role)){
+    if(!roleAllows(ctx.role, 'periods')){
       return json(403, { error: 'Only Head Office or the Branch Manager can close or reopen accounting periods.' });
     }
 

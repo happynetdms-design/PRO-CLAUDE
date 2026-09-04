@@ -22,7 +22,7 @@ function downloadText(filename, text, mime){
 async function downloadViaApi(path, filename){
   try{
     const res = await apiFetch(path, { method:'GET' });
-    if(!res.ok){ const body = await res.json().catch(()=>({})); throw new Error(body.error || 'Export failed.'); }
+    if(!res.ok){ const body = await safeParseJson(res); throw new Error(body.error || 'Export failed.'); }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

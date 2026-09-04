@@ -126,7 +126,7 @@ chat UI). Design choices worth knowing:
   it, the endpoint returns a clear error rather than failing silently. Get
   a key from the Anthropic Console and add it under Site settings →
   Environment variables.
-- Uses `claude-sonnet-5`. Cost is per-request (a handful of cents at most,
+- Uses `claude-sonnet-4-20250514`. Cost is per-request (a handful of cents at most,
   given the small summary) — worth knowing if the tab gets used a lot.
 - Conversation history is kept in the browser tab only (not persisted) and
   capped server-side, so a long back-and-forth doesn't balloon the request.

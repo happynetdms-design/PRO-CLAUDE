@@ -6,7 +6,7 @@
 const { requireUser, adminClient, json } = require('./_lib/supabase');
 const { requireBranchAccess } = require('./_lib/rbac');
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-4-20250514';
 const MAX_BASE64_BYTES = 8 * 1024 * 1024;
 
 // A model's text output can never be trusted to parse as JSON just

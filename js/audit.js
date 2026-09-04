@@ -7,7 +7,7 @@ async function checkSyncHealth(){
   try{
     const res = await apiFetch('/api/sync-health', { method:'GET' });
     if(!res.ok) return; // fail silent here too — this is a health check, not a critical path
-    const body = await res.json();
+    const body = await safeParseJson(res);
     syncHealthState = { checked:true, count: body.count||0, errors: body.errors||[], tables: body.tables||[], tablesOk: body.tables_ok_count||0, tablesTotal: body.tables_total||0 };
   }catch(e){ /* silent — matches the sync itself: never let a health check disrupt anything */ }
   render();
@@ -15,7 +15,7 @@ async function checkSyncHealth(){
 async function loadSyncErrors(){
   try{
     const res = await apiFetch('/api/sync-health', { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(res.ok) syncHealthState = { checked:true, count: body.count||0, errors: body.errors||[], tables: body.tables||[], tablesOk: body.tables_ok_count||0, tablesTotal: body.tables_total||0 };
   }catch(e){}
   render();
@@ -27,7 +27,7 @@ async function loadAudit(tableFilter){
     let url = '/api/audit?limit=300';
     if(tableFilter) url += `&table_name=${encodeURIComponent(tableFilter)}`;
     const res = await apiFetch(url, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load the audit log.');
     auditState.entries = body.audit_log || [];
     auditState.error = null;

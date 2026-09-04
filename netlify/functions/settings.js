@@ -1,11 +1,9 @@
 const { requireUser, adminClient, json } = require('./_lib/supabase');
-const { requireBranchAccess } = require('./_lib/rbac');
+const { requireBranchAccess, roleAllows } = require('./_lib/rbac');
 
 // Changing the Profit First split is a bigger deal than a routine expense
 // entry, so it's restricted to Head Office or the branch's own manager —
 // not every "write" role gets to touch it.
-const SETTINGS_WRITE_ROLES = ['owner', 'finance_manager', 'branch_manager'];
-
 exports.handler = async (event) => {
   const admin = adminClient();
   const method = event.httpMethod;
@@ -31,7 +29,7 @@ exports.handler = async (event) => {
     }
 
     if(method === 'PUT'){
-      if(!SETTINGS_WRITE_ROLES.includes(ctx.role)){
+      if(!roleAllows(ctx.role, 'settings')){
         return json(403, { error: 'Only Head Office or the Branch Manager can change Profit First settings.' });
       }
       // Happynet's actual split is 4 buckets of total revenue (must sum to

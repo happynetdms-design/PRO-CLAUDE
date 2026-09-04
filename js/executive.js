@@ -5,7 +5,7 @@ let decisionQueueState = { loading:false, decisions:null, error:null, formOpen:f
 async function loadDecisionQueue(){
   try{
     const res = await apiFetch(`/api/management-decisions?branch_id=${state.branchId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load the decision queue.');
     decisionQueueState.decisions = body.decisions || [];
     decisionQueueState.error = null;
@@ -26,7 +26,7 @@ async function addDecision(fields){
   decisionQueueState.formError = null;
   try{
     const res = await apiFetch('/api/management-decisions', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, ...fields }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not add this decision.');
     closeDecisionForm();
     await loadDecisionQueue();
@@ -35,7 +35,7 @@ async function addDecision(fields){
 async function setDecisionStatus(id, status){
   try{
     const res = await apiFetch('/api/management-decisions', { method:'PATCH', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, id, status }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not update.');
     await loadDecisionQueue();
   }catch(e){ showToast(e.message, 'error'); }
@@ -48,7 +48,7 @@ async function runScenario(){
     const revPct = document.getElementById('scenario-revenue-pct').value || 0;
     const expPct = document.getElementById('scenario-expense-pct').value || 0;
     const res = await apiFetch(`/api/scenario?branch_id=${state.branchId}&revenue_change_pct=${revPct}&expense_change_pct=${expPct}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not run the scenario.');
     scenarioState.result = body;
   }catch(e){ scenarioState.error = e.message; }
@@ -62,7 +62,7 @@ async function loadExecutive(period){
   try{
     const p = period || new Date().toISOString().slice(0,7);
     const res = await apiFetch(`/api/executive-dashboard?branch_id=${state.branchId}&period=${p}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load the executive dashboard.');
     executiveState.data = body;
   }catch(e){ executiveState.error = e.message; }

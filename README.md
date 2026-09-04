@@ -53,11 +53,18 @@ header comment states its real dependencies; this list matches those.
 backward compatibility with `state.js`, an early-build endpoint some
 tooling may still reference — it is not part of the current data model.
 
-## Environment variables (Netlify site settings)
+## Environment variables (server settings)
 
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - `ANTHROPIC_API_KEY` — powers the AI Assistant, document intelligence (receipt/invoice/statement extraction), and the dashboard narrative
-- Google sign-in additionally requires the Google provider configured under Supabase → Authentication → Providers, with `https://<your-site>/api/google-oauth-callback` added as an authorized redirect URL (see that function's header comment)
+- Google sign-in additionally requires the Google provider configured under Supabase → Authentication → Providers, with `https://<your-site>/` added to Supabase Auth URL Configuration as an allowed redirect URL
+
+For local Vite development, put the server variables in `.env.local` as well
+as the `VITE_` browser variables. `SUPABASE_SERVICE_ROLE_KEY` is required for
+Staff & Access, branch creation, access grants, and server-side database
+operations. Do not prefix it with `VITE_` or expose it to browser code; using
+the anon key for this server client causes Supabase RLS errors such as `new
+row violates row-level security policy for table "branches"`.
 
 ## What's built
 

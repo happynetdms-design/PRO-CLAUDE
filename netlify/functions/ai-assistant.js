@@ -14,7 +14,7 @@
 const { requireUser, adminClient, json } = require('./_lib/supabase');
 const { requireBranchAccess } = require('./_lib/rbac');
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-4-20250514';
 const MAX_HISTORY_TURNS = 6;
 
 function monthKey(dateStr){ return (dateStr || '').slice(0, 7); }
@@ -143,7 +143,10 @@ exports.handler = async (event) => {
       conversationId = conv ? conv.id : null;
     }
     if(conversationId){
-      await admin.from('ai_messages').insert({ conversation_id: conversationId, role: 'user', content: question }).catch(()=>{});
+      await admin.from('ai_messages')
+        .insert({ conversation_id: conversationId, role: 'user', content: question })
+        .then(()=>{})
+        .catch(()=>{});
     }
 
     const trimmedHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_TURNS) : [];
@@ -170,15 +173,28 @@ exports.handler = async (event) => {
     if(!res.ok){
       const errBody = await res.text();
       console.error('Anthropic API error', res.status, errBody);
+      if(res.status === 400 && /credit balance is too low|purchase credits|plans & billing/i.test(errBody)){
+        return json(502, { error: 'The AI assistant is configured, but the Anthropic account needs credits before it can answer.' });
+      }
       return json(502, { error: 'The AI assistant is temporarily unavailable.' });
     }
 
     const data = await res.json();
-    const answer = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    const answer = Array.isArray(data.content)
+      ? data.content.filter(b => b && b.type === 'text').map(b => b.text).join('\n')
+      : '';
+    if(!answer) return json(502, { error: 'The AI assistant returned an empty response.' });
 
     if(conversationId){
-      await admin.from('ai_messages').insert({ conversation_id: conversationId, role: 'assistant', content: answer }).catch(()=>{});
-      await admin.from('ai_conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId).catch(()=>{});
+      await admin.from('ai_messages')
+        .insert({ conversation_id: conversationId, role: 'assistant', content: answer })
+        .then(()=>{})
+        .catch(()=>{});
+      await admin.from('ai_conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversationId)
+        .then(()=>{})
+        .catch(()=>{});
     }
 
     return json(200, { answer, data_as_of: summary.as_of, conversation_id: conversationId });

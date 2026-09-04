@@ -11,6 +11,19 @@ function waitForAuth(milliseconds){
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
+async function provisionDefaultAccessFallback(){
+  const { data } = await withAuthTimeout(supabaseClient.auth.getSession());
+  const token = data && data.session && data.session.access_token;
+  if(!token) return false;
+  const response = await withAuthTimeout(fetch('/api/onboarding-access', {
+    method:'POST',
+    headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' }
+  }));
+  if(!response.ok) return false;
+  const body = await response.json();
+  return !!(body && body.grant && body.grant.branch_id && ALLOWED_USER_ROLES.has(body.grant.role));
+}
+
 async function resolveUserAccess(user){
   const readAccessGrants = async () => {
     const result = await withAuthTimeout(supabaseClient
@@ -42,10 +55,14 @@ async function resolveUserAccess(user){
     const defaultBranchResult = await withAuthTimeout(supabaseClient.rpc('ensure_default_branch_access'));
     if(defaultBranchResult && defaultBranchResult.error){
       const message = String(defaultBranchResult.error.message || '').toLowerCase();
-      if(!message.includes('does not exist') && !message.includes('no active branch') && !message.includes('authentication is required')){
+      if(!message.includes('does not exist') && !message.includes('schema cache') && !message.includes('no active branch') && !message.includes('authentication is required')){
         lastError = defaultBranchResult.error;
       }
     }
+  }catch(error){ lastError = error; }
+
+  try{
+    await provisionDefaultAccessFallback();
   }catch(error){ lastError = error; }
 
   try{
@@ -112,6 +129,9 @@ function authErrorMessage(error){
   if(code.includes('timeout') || message.includes('timeout') || message.includes('network') || message.includes('failed to fetch')){
     return 'We could not reach authentication right now. Check your connection and try again.';
   }
+  if(message.includes('provider is not enabled') || message.includes('unsupported provider') || message.includes('google')){
+    return 'Google sign-in is not enabled yet. Enable Google under Supabase Authentication → Providers.';
+  }
   return error && error.message ? error.message : 'Sign in failed. Please try again.';
 }
 
@@ -120,15 +140,14 @@ async function apiSignup(email, password, fullName){
     throw new Error('Enter a valid email and a password of at least 8 characters.');
   }
   try{
-    const { data, error } = await withAuthTimeout(supabaseClient.auth.signUp({
-      email:email.trim(),
-      password,
-      options:{ data:{ full_name:String(fullName || '').trim() }, emailRedirectTo:window.location.origin + window.location.pathname }
+    const response = await withAuthTimeout(fetch('/api/signup', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Accept:'application/json' },
+      body:JSON.stringify({ email:email.trim(), password, full_name:String(fullName || '').trim() })
     }));
-    if(error) throw error;
-    if(!data || !data.user) throw new Error('Account creation did not complete. Please try again.');
-    if(!data.session) return { needsConfirmation:true, email:email.trim() };
-    await supabaseClient.auth.signOut({ scope:'local' }).catch(()=>{});
+    const body = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(body.error || 'Account creation did not complete. Please try again.');
+    if(body.needs_confirmation) return { needsConfirmation:true, email:email.trim() };
     return { needsAccess:true, email:email.trim() };
   }catch(error){ throw new Error(authErrorMessage(error)); }
 }
@@ -216,6 +235,19 @@ async function apiLogin(email, password, remember){
   };
   setSession(sessionData, remember);
   return sessionData;
+}
+
+async function restoreAuthSession(storedSession){
+  if(!storedSession || !storedSession.access_token || !storedSession.refresh_token) return false;
+  try{
+    const { data, error } = await withAuthTimeout(supabaseClient.auth.setSession({
+      access_token:storedSession.access_token,
+      refresh_token:storedSession.refresh_token
+    }));
+    return !error && !!(data && data.session && data.user);
+  }catch(error){
+    return false;
+  }
 }
 
 async function apiRefresh(){

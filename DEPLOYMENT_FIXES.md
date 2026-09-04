@@ -61,16 +61,14 @@
 
 ### For Local Development
 - [ ] Run `npm install` to install dependencies
-- [ ] If using a dev server, ensure it:
-  - Serves functions from `netlify/functions/`
-  - Redirects `/api/*` to functions
-  - Falls back to index.html for SPA routes
-- [ ] Test: `node scripts/verify_api_routing.js` (requires running dev server on http://localhost:3000)
+- [ ] Run `npm run dev` or `npx vite --port 4173`
+- [ ] The Vite middleware in `vite.config.js` loads API handlers from `netlify/functions/`
+- [ ] Add `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` for Staff & Access, branches, and all server-side database writes. The anon key cannot bypass RLS and must never be used as a service-role substitute.
+- [ ] Test: `node scripts/verify_api_routing.js` (requires Vite running on http://localhost:4173)
 
 ### For Supabase Setup
-- [ ] Ensure `oauth_pkce_state` table exists (created by hfms_foundation_fix_18_oauth_pkce.sql)
 - [ ] Enable Google OAuth Provider in Supabase Auth settings
-- [ ] Set Google OAuth callback URL to: `https://your-domain/api/google-oauth-callback`
+- [ ] Add `https://your-domain/` to Supabase Auth URL Configuration as an allowed redirect URL
 - [ ] Run `supabase/ensure_default_access.sql` to enable auto-branch-assignment function
 
 ---
@@ -86,7 +84,7 @@
 
 ### Automated Tests
 ```bash
-# If dev server running on http://localhost:3000
+# If Vite is running on http://localhost:4173
 node scripts/verify_api_routing.js
 
 # Syntax check

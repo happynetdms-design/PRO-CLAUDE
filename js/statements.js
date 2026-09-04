@@ -9,7 +9,7 @@ async function loadPeriods(){
   periodsState.loading = true; render();
   try{
     const res = await apiFetch(`/api/accounting-periods?branch_id=${state.branchId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load accounting periods.');
     periodsState.periods = body.periods || [];
     periodsState.error = null;
@@ -27,7 +27,7 @@ async function openClosePreflight(){
   render();
   try{
     const res = await apiFetch(`/api/accounting-periods?action=preflight&branch_id=${state.branchId}&period_start=${start}&period_end=${end}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not run the pre-close checklist.');
     closePreflightState.checklist = body.checklist;
     closePreflightState.canClose = body.can_close;
@@ -46,7 +46,7 @@ async function confirmClosePeriod(){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, period_start: start, period_end: end })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not close the period.');
     periodsState.actionMsg = { ok:true, text:'Period closed.' };
     closeClosePreflight();
@@ -88,7 +88,7 @@ async function reopenPeriod(periodId){
       method:'PATCH', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, period_id: periodId, reason: reason.trim() })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not reopen the period.');
     await loadPeriods();
   }catch(e){
@@ -134,7 +134,7 @@ async function loadConsolidated(period, periodType){
   render();
   try{
     const res = await apiFetch(`/api/financial-statements-consolidated?period=${period}&period_type=${periodType}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load the consolidated statement.');
     consolidatedState.data = body;
   }catch(e){ consolidatedState.error = e.message; }
@@ -201,7 +201,7 @@ async function loadStatements(period, periodType, compareEnabled){
     let url = `/api/financial-statements?branch_id=${state.branchId}&period=${statementsState.period}&period_type=${statementsState.periodType}`;
     if(statementsState.comparePeriod) url += `&compare_period=${statementsState.comparePeriod}`;
     const res = await apiFetch(url, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load financial statements.');
     statementsState.data = body;
   }catch(e){

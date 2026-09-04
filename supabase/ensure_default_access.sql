@@ -59,6 +59,16 @@ begin
   if default_branch_id is null then
     select b.id into default_branch_id
     from public.branches b
+    where b.company_id = company_id
+      and b.code = 'main'
+      and coalesce(b.is_active, true)
+    order by b.created_at asc, b.id asc
+    limit 1;
+  end if;
+
+  if default_branch_id is null then
+    select b.id into default_branch_id
+    from public.branches b
     where coalesce(b.is_active, true)
     order by b.created_at asc, b.id asc
     limit 1;

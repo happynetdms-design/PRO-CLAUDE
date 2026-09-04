@@ -18,7 +18,7 @@ async function extractStatementDocument(file){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, file_name: file.name, content_type: file.type, data_base64: base64 })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not read this statement.');
     statementExtractState.result = body;
   }catch(e){
@@ -32,7 +32,7 @@ async function loadImports(){
   reconcileState.loading = true; render();
   try{
     const res = await apiFetch(`/api/reconciliation?branch_id=${state.branchId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load reconciliation imports.');
     reconcileState.imports = body.imports || [];
     reconcileState.error = null;
@@ -44,7 +44,7 @@ async function openImport(importId){
   reconcileState.loading = true; render();
   try{
     const res = await apiFetch(`/api/reconciliation?import_id=${importId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load this import.');
     reconcileState.current = importId;
     reconcileState.lines = body.lines || [];
@@ -72,7 +72,7 @@ async function createImport(label, accountName, periodStart, periodEnd, rawText)
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, label, account_name: accountName, period_start: periodStart, period_end: periodEnd, lines })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not create import.');
     await loadImports();
     await openImport(body.import.id);
@@ -84,7 +84,7 @@ async function resolveLine(lineId, resolution, matchedTxnId){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, line_id: lineId, resolution, matched_transaction_id: matchedTxnId })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not resolve line.');
     await openImport(reconcileState.current);
   }catch(e){ showToast('Could not resolve: ' + e.message, 'error'); }
@@ -92,7 +92,7 @@ async function resolveLine(lineId, resolution, matchedTxnId){
 async function submitImport(){
   try{
     const res = await apiFetch('/api/reconciliation?action=submit', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, import_id: reconcileState.current }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not submit.');
     await loadImports(); await openImport(reconcileState.current);
   }catch(e){ showToast(e.message, 'error'); }
@@ -100,7 +100,7 @@ async function submitImport(){
 async function approveImport(){
   try{
     const res = await apiFetch('/api/reconciliation?action=approve', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, import_id: reconcileState.current }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not approve.');
     await loadImports(); await openImport(reconcileState.current);
   }catch(e){ showToast(e.message, 'error'); }
@@ -158,7 +158,7 @@ function viewReconcile(){
   return `
     <div class="topbar"><div><h1>Reconciliation</h1><div class="sub">Match a bank or mobile-money statement against your ledger.</div></div></div>
     ${loading ? `<div class="card"><span class="hint">Loading…</span></div>` : ''}
-    ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div><div class="hint">This needs <code>hfms_foundation_fix_05_reconciliation.sql</code> run against Supabase first.</div></div>` : ''}
+    ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div>${/bank_statement_imports|bank_statement_lines|reconciliation/i.test(error) ? `<div class="hint">This needs <code>hfms_foundation_fix_05_reconciliation.sql</code> run against Supabase first.</div>` : ''}</div>` : ''}
     ${formError ? `<div class="hint" style="color:#c0392b; margin-bottom:10px;">${formError}</div>` : ''}
 
     ${canWrite() ? `

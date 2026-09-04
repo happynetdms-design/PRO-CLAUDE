@@ -7,6 +7,7 @@
 // grant you access"), so a self-registered account is fully authenticated
 // but functionally inert until someone deliberately lets it in.
 const { anonClient, adminClient, json } = require('./_lib/supabase');
+const { ensureDefaultAccess } = require('./_lib/onboarding');
 
 function isValidEmail(email){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -45,6 +46,15 @@ exports.handler = async (event) => {
       const { error: profileErr } = await admin.from('user_profiles').upsert({ user_id: data.user.id, full_name });
       if(profileErr) console.error('signup: could not create user_profiles row', profileErr);
       // Not fatal — the account itself is real and can sign in either way.
+    }
+
+    if(data.user){
+      try{
+        await ensureDefaultAccess(adminClient(), data.user.id);
+      }catch(accessError){
+        console.error('signup: could not provision default branch access', accessError);
+        // Login retries provisioning for accounts created during a temporary outage.
+      }
     }
 
     if(data.session){

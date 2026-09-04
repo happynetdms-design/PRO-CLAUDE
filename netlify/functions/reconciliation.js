@@ -3,7 +3,7 @@
 // to financial_transactions or the journal — reconciliation proves the
 // ledger is right, it doesn't change it.
 const { requireUser, adminClient, json } = require('./_lib/supabase');
-const { requireBranchAccess } = require('./_lib/rbac');
+const { requireBranchAccess, roleAllows } = require('./_lib/rbac');
 
 exports.handler = async (event) => {
   const admin = adminClient();
@@ -31,9 +31,18 @@ exports.handler = async (event) => {
         if(linesErr) return json(500, { error: linesErr.message });
         return json(200, { lines, suggestions: suggestions || [] });
       }
-      const { data, error } = await admin.from('bank_statement_imports').select('*, financial_accounts(name)').eq('branch_id', branchId).order('imported_at', { ascending: false });
+      const { data, error } = await admin.from('bank_statement_imports').select('*').eq('branch_id', branchId).order('imported_at', { ascending: false });
       if(error) return json(500, { error: error.message });
-      return json(200, { imports: data });
+      const accountIds = [...new Set((data || []).map(item => item.account_id).filter(Boolean))];
+      let accountById = {};
+      if(accountIds.length){
+        const { data: accounts } = await admin.from('financial_accounts').select('id, name').in('id', accountIds);
+        accountById = Object.fromEntries((accounts || []).map(account => [account.id, account]));
+      }
+      return json(200, { imports: (data || []).map(item => ({
+        ...item,
+        financial_accounts: accountById[item.account_id] || null
+      })) });
     }
 
     if(method === 'POST' && action === 'create'){
@@ -108,7 +117,7 @@ exports.handler = async (event) => {
     }
 
     if(method === 'POST' && action === 'approve'){
-      if(!ctx.access.isHeadOffice && ctx.role !== 'branch_manager'){
+      if(!roleAllows(ctx.role, 'approve')){
         return json(403, { error: 'Only Head Office or the Branch Manager can approve a reconciliation.' });
       }
       if(!body.import_id) return json(400, { error: 'import_id is required.' });

@@ -1,5 +1,5 @@
 const { requireUser, adminClient, json } = require('./_lib/supabase');
-const { requireBranchAccess } = require('./_lib/rbac');
+const { requireBranchAccess, roleAllows } = require('./_lib/rbac');
 
 // The app treats accounts and categories as plain names, not managed
 // entities with stable IDs — accounts are the fixed list seeded during
@@ -83,7 +83,7 @@ exports.handler = async (event) => {
           amount_kes: r.amount_kes,
           charges_kes: r.charges_kes || 0,
           owner_funded: !!r.owner_funded,
-          status: r.status || 'posted',
+          status: roleAllows(ctx.role, 'approve') ? (r.status || 'posted') : 'pending_approval',
           source: r.source || 'manual',
           created_by: ctx.user.id
         };
@@ -112,8 +112,7 @@ exports.handler = async (event) => {
       // a direct API call.
       const isApprovalAction = body.status === 'posted' || body.status === 'rejected';
       if(isApprovalAction){
-        const APPROVER_ROLES = ['owner', 'finance_manager', 'branch_manager'];
-        if(!ctx.access.isHeadOffice && !APPROVER_ROLES.includes(ctx.role)){
+        if(!roleAllows(ctx.role, 'approve')){
           const { data: current } = await admin.from('expenses').select('status').eq('id', body.id).eq('branch_id', branchId).maybeSingle();
           if(current && current.status === 'pending_approval'){
             return json(403, { error: 'Only a Branch Manager or Head Office can approve or reject an expense.' });

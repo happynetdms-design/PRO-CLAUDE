@@ -2,7 +2,7 @@
 // posting call the SQL functions from hfms_foundation_fix_04.sql (which
 // do the actual double-entry work) rather than duplicating that logic here.
 const { requireUser, adminClient, json } = require('./_lib/supabase');
-const { requireBranchAccess } = require('./_lib/rbac');
+const { requireBranchAccess, roleAllows } = require('./_lib/rbac');
 
 // Same category-by-name resolution pattern as expenses.js — categories are
 // plain names in this app, not something the user picks an ID for.
@@ -59,7 +59,7 @@ exports.handler = async (event) => {
       // posts a real expense to the ledger) needs a Branch Manager or
       // Head Office. This was missing when bills.js was first built;
       // fixing it here rather than leaving it inconsistent with expenses.
-      if(!ctx.access.isHeadOffice && ctx.role !== 'branch_manager'){
+      if(!roleAllows(ctx.role, 'approve')){
         return json(403, { error: 'Only a Branch Manager or Head Office can approve a bill.' });
       }
       const { data: je, error } = await admin.rpc('hfms_post_bill_approval', { p_bill_id: body.id });

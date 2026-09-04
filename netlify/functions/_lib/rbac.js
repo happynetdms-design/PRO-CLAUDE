@@ -9,6 +9,14 @@
 
 const WRITE_ROLES = ['owner', 'finance_manager', 'branch_manager', 'accountant'];
 const READ_ROLES  = ['owner', 'finance_manager', 'branch_manager', 'accountant', 'auditor', 'viewer'];
+const ROLE_PERMISSIONS = {
+  owner: ['read', 'write', 'approve', 'settings', 'periods', 'administration'],
+  finance_manager: ['read', 'write', 'approve', 'settings', 'periods', 'administration'],
+  branch_manager: ['read', 'write', 'approve', 'settings', 'periods'],
+  accountant: ['read', 'write'],
+  auditor: ['read'],
+  viewer: ['read']
+};
 
 // Loads every branch this user has been granted, plus whether they're
 // Head Office (owner/finance_manager — implicitly see every branch).
@@ -44,7 +52,20 @@ function canRead(access, branchId){
 function canWrite(access, branchId){
   if(access.isHeadOffice) return true;
   const role = access.byBranch.get(branchId);
-  return !!role && WRITE_ROLES.includes(role);
+  return roleAllows(role, 'write');
+}
+
+function roleAllows(role, permission){
+  return !!ROLE_PERMISSIONS[role] && ROLE_PERMISSIONS[role].includes(permission);
+}
+
+function canApprove(access, branchId){
+  if(access.isHeadOffice) return true;
+  return roleAllows(access.byBranch.get(branchId), 'approve');
+}
+
+function canAdminister(access){
+  return access.isHeadOffice;
 }
 
 // One-stop helper for endpoints: validates the session token, loads the
@@ -66,4 +87,4 @@ async function requireBranchAccess(event, requireUser, admin, branchId, { write 
   return { user, access, role: roleOnBranch(access, branchId), status: 200 };
 }
 
-module.exports = { getAccess, roleOnBranch, canRead, canWrite, requireBranchAccess, WRITE_ROLES, READ_ROLES };
+module.exports = { getAccess, roleOnBranch, roleAllows, canRead, canWrite, canApprove, canAdminister, requireBranchAccess, WRITE_ROLES, READ_ROLES, ROLE_PERMISSIONS };

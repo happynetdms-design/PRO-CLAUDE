@@ -62,7 +62,7 @@ async function loadTaxIntel(){
   taxIntelState.loading = true; render();
   try{
     const res = await apiFetch(`/api/tax-intelligence?branch_id=${state.branchId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load tax intelligence.');
     taxIntelState.data = body;
     taxIntelState.error = null;
@@ -77,7 +77,7 @@ async function createTaxPeriod(obligationId, periodStart, periodEnd, amountDue){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, action:'period', tax_obligation_id: obligationId, period_start: periodStart, period_end: periodEnd, amount_due_kes: amountDue })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not create period.');
     await loadTaxIntel();
   }catch(e){ taxIntelState.formError = e.message; render(); }
@@ -86,7 +86,7 @@ async function fileTaxPeriod(periodId){
   const ref = (await promptDialog('Filing reference (optional):')) || null;
   try{
     const res = await apiFetch('/api/tax-intelligence', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, action:'file', tax_period_id: periodId, filing_status:'filed', filing_reference: ref }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not mark as filed.');
     await loadTaxIntel();
   }catch(e){ showToast(e.message, 'error'); }
@@ -98,7 +98,7 @@ async function recordTaxPayment(periodId, dueRemaining){
   if(!amount || amount<=0){ showToast('Enter a valid amount.', 'error'); return; }
   try{
     const res = await apiFetch('/api/tax-intelligence', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, action:'payment', tax_period_id: periodId, amount_kes: amount, payment_date: todayISO() }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not record payment.');
     await loadTaxIntel();
   }catch(e){ showToast(e.message, 'error'); }

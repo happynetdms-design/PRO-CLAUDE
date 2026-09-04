@@ -27,7 +27,7 @@ async function extractFromReceipt(file, context){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, file_name: file.name, content_type: file.type || 'image/jpeg', data_base64: base64, document_type: context === 'bill' ? 'invoice' : 'receipt' })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not read this document.');
     docIntelState.result = body;
   }catch(e){
@@ -60,7 +60,7 @@ async function loadFollowUps(){
   followUpsState.loading = true; render();
   try{
     const res = await apiFetch(`/api/ai-followups?branch_id=${state.branchId}`, { method:'GET' });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not load follow-ups.');
     followUpsState.items = body.follow_ups || [];
     followUpsState.error = null;
@@ -73,7 +73,7 @@ async function trackFollowUp(messageIndex){
   if(!msg) return;
   try{
     const res = await apiFetch('/api/ai-followups', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, description: msg.content }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not track this.');
     await loadFollowUps();
   }catch(e){ showToast(e.message, 'error'); }
@@ -81,7 +81,7 @@ async function trackFollowUp(messageIndex){
 async function resolveFollowUp(id, status){
   try{
     const res = await apiFetch('/api/ai-followups', { method:'PATCH', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, id, status }) });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'Could not update.');
     await loadFollowUps();
   }catch(e){ showToast(e.message, 'error'); }
@@ -139,7 +139,7 @@ async function askAssistant(question){
         conversation_id: assistantConversationId
       })
     });
-    const body = await res.json();
+    const body = await safeParseJson(res);
     if(!res.ok) throw new Error(body.error || 'The assistant could not answer that.');
     assistantMessages.push({ role:'assistant', content: body.answer });
     if(body.conversation_id) assistantConversationId = body.conversation_id;

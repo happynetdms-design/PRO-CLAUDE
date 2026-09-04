@@ -19,6 +19,15 @@ function currentOpenMonth(){
 }
 
 function revenueForMonth(ym){ return state.dailyRevenue.filter(r => monthKey(r.date) === ym); }
+function calendarDaysElapsed(ym){
+  const [year, month] = ym.split('-').map(Number);
+  const monthStart = new Date(year, month - 1, 1);
+  const today = new Date();
+  const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  if(monthStart < currentMonthStart) return daysInMonth(ym);
+  if(monthStart > currentMonthStart) return 0;
+  return Math.min(today.getDate(), daysInMonth(ym));
+}
 // Pending-approval and rejected expenses are real rows (visible, editable,
 // approvable) but shouldn't move any money total until a Branch Manager or
 // Head Office approves them — this is the one place that filter needs to
@@ -61,7 +70,7 @@ function monthTotals(ym){
   const ownerFunded = expRows.filter(e=>e.owner_funded).reduce((s,e)=>s+e.amount_kes+e.charges_kes,0);
   const netOpex = grossOpex - ownerFunded;
   const alloc = pf(totalRevenue);
-  const daysElapsed = revRows.length;
+  const daysElapsed = calendarDaysElapsed(ym);
   const dim = daysInMonth(ym);
   return { totalRevenue, grossOpex, ownerFunded, netOpex, alloc, daysElapsed, dim, revRows, expRows };
 }

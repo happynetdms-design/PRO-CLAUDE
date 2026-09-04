@@ -25,7 +25,7 @@
 const { requireUser, adminClient, json } = require('./_lib/supabase');
 const { requireBranchAccess } = require('./_lib/rbac');
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = 'claude-sonnet-4-20250514';
 const MAX_BASE64_BYTES = 15 * 1024 * 1024;
 const MAX_ROWS = 200;
 

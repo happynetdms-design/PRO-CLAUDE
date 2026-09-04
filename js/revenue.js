@@ -46,11 +46,8 @@ async function handleRevenueImport(ev){
       if(statusEl) statusEl.innerHTML=''; render(); ev.target.value=''; return;
     }
 
-    const existingDates = new Set(state.dailyRevenue.map(r=>r.date));
     const newRows = [];
-    let skippedExisting = 0;
     for(const [date, amount] of Object.entries(byDate)){
-      if(existingDates.has(date)){ skippedExisting++; continue; }
       newRows.push({ id: uid(), date, revenue_kes: Math.round(amount), notes: 'Imported from Organization Utility statement' });
     }
     newRows.sort((a,b)=>a.date<b.date?-1:1);
@@ -58,21 +55,21 @@ async function handleRevenueImport(ev){
     let confirmedRows = [];
     const errors = [];
     if(newRows.length){
-      if(statusEl) statusEl.innerHTML = `<span class="hint">Saving ${newRows.length} day(s)…</span>`;
+      if(statusEl) statusEl.innerHTML = `<span class="hint">Saving ${newRows.length} daily total(s)…</span>`;
       try{
         const entries = newRows.map(CORE_ENTITY_CONFIG.dailyRevenue.toApi);
         const apiResult = await apiCreate('/api/revenue', { branch_id: state.branchId, entries });
         const insertedIds = new Set((apiResult.inserted||[]).map(x=>x.id));
         confirmedRows = newRows.filter(r=>insertedIds.has(r.id));
-        for(const skip of (apiResult.skipped||[])){ skippedExisting++; errors.push(skip.reason || 'A day was skipped by the server.'); }
+        for(const skip of (apiResult.skipped||[])){ errors.push(skip.reason || 'A revenue entry was skipped by the server.'); }
       }catch(err){
-        revenueImportResult = { imported:0, skippedExisting, errors:[...errors, 'Save failed: '+err.message] };
+        revenueImportResult = { imported:0, skippedExisting:0, errors:[...errors, 'Save failed: '+err.message] };
         if(statusEl) statusEl.innerHTML=''; render(); ev.target.value=''; return;
       }
     }
     state.dailyRevenue = state.dailyRevenue.concat(confirmedRows);
     if(lastSynced) lastSynced.dailyRevenue = JSON.parse(JSON.stringify(state.dailyRevenue));
-    revenueImportResult = { imported: confirmedRows.length, skippedExisting, errors };
+    revenueImportResult = { imported: confirmedRows.length, skippedExisting:0, errors };
     render();
   }catch(err){
     revenueImportResult = { imported:0, skippedExisting:0, errors:['Could not read this file: '+err.message] };
@@ -87,7 +84,7 @@ function viewDaily(){
   const editing = editingRevenueId ? state.dailyRevenue.find(r=>r.id===editingRevenueId) : null;
   return `
     <div class="topbar">
-      <div><h1>Daily Entry</h1><div class="sub">One revenue row per day. ${monthLabel(ym)} is open for entry.</div></div>
+      <div><h1>Daily Entry</h1><div class="sub">Add as many revenue transactions as needed. Daily totals are computed from all entries for the date. ${monthLabel(ym)} is open for entry.</div></div>
     </div>
 
     ${canWrite() ? `
@@ -107,7 +104,7 @@ function viewDaily(){
 
     <div class="form-card">
       <h3>Import from Organization Utility statement</h3>
-      <div class="sub" style="margin-bottom:10px;">Upload the raw M-Pesa Organization Utility Account export. Each settlement sweep (Utility Account → Organization Settlement Account) is grouped by date and becomes that day's revenue total — this is the actual customer-payment signal for the period, confirmed against the file's own reported total. A day that already has a revenue entry is left alone and reported as skipped, so re-uploading an overlapping period never double-counts.</div>
+      <div class="sub" style="margin-bottom:10px;">Upload the raw M-Pesa Organization Utility Account export. Settlement sweeps are grouped into one imported daily total, while any existing entries for the same date remain separate. Re-upload only files that have not already been recorded.</div>
       <input type="file" id="file-import-revenue" accept=".csv">
       <div id="import-revenue-status" style="margin-top:10px;"></div>
       ${revenueImportResult ? `

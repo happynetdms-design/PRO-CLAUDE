@@ -460,7 +460,11 @@ async function syncSettings(){
 let availableBranches = [];
 
 async function loadState(preferredBranchId){
-  const me = await apiGetMe();
+  let me = await apiGetMe();
+  for(let attempt = 0; attempt < 2 && (!me.branches || me.branches.length === 0); attempt++){
+    await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    me = await apiGetMe();
+  }
   currentUserEmail = me.user ? me.user.email : currentUserEmail; // always prefer the server-verified email over whatever the session object had
   if(!me.branches || me.branches.length === 0){
     const error = new Error('Your account has no branch access yet — ask an admin to grant you access.');
@@ -548,9 +552,18 @@ async function switchBranch(branchId){
 // Role gates, used throughout the UI to hide/disable actions someone's role
 // can't perform — the API enforces this regardless, but showing a button
 // that will just 403 is a bad experience, not real security.
-function canWrite(){ return state.isHeadOffice || ['branch_manager','accountant'].includes(state.role); }
-function canManageSettings(){ return state.isHeadOffice || state.role === 'branch_manager'; }
-function canApprove(){ return state.isHeadOffice || state.role === 'branch_manager'; }
+const ROLE_PERMISSIONS = {
+  owner: ['read', 'write', 'approve', 'settings', 'periods', 'administration'],
+  finance_manager: ['read', 'write', 'approve', 'settings', 'periods', 'administration'],
+  branch_manager: ['read', 'write', 'approve', 'settings', 'periods'],
+  accountant: ['read', 'write'],
+  auditor: ['read'],
+  viewer: ['read']
+};
+function roleAllows(permission){ return !!ROLE_PERMISSIONS[state.role] && ROLE_PERMISSIONS[state.role].includes(permission); }
+function canWrite(){ return roleAllows('write'); }
+function canManageSettings(){ return roleAllows('settings'); }
+function canApprove(){ return roleAllows('approve'); }
 function readOnlyNotice(){
   return `<div class="hint" style="display:flex; align-items:center; gap:8px; padding:12px 14px; background:var(--neutral-soft); border-radius:10px; margin-bottom:16px;">${ic('lock',14)}Your role (${(state.role||'').replace(/_/g,' ')}) has read-only access here.</div>`;
 }

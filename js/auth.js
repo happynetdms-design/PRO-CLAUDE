@@ -8,19 +8,8 @@ let recoveryToken = null; // { accessToken, refreshToken } from a recovery link
 let recoveryMsg = null;
 
 function renderAccessPending(){
-  root().innerHTML = `
-    <div class="login-wrap">
-      <div class="login-panel" style="flex:1;">
-        <div class="login-card">
-          <div class="login-card-icon">${ICON_LOCK}</div>
-          <p class="login-title">Account created successfully</p>
-          <p class="login-sub">Your sign-in is valid. The system is assigning your default branch access automatically. If the dashboard still does not open, sign out and try again.</p>
-          <button class="btn full" style="background:var(--ink); color:#fff;" id="access-pending-signout">Return to sign in</button>
-        </div>
-      </div>
-    </div>`;
-  const signOut = document.getElementById('access-pending-signout');
-  if(signOut) signOut.addEventListener('click', async ()=>{ await apiLogout(); renderLogin(); });
+  setSession(null);
+  renderLogin();
 }
 
 function renderRecovery(){
@@ -28,12 +17,14 @@ function renderRecovery(){
     <div class="login-wrap">
       <div class="login-hero">
         <div class="login-hero-rings"></div>
+        <div class="login-hero-grid"></div>
         <div>
           <div class="login-logo">
             <span class="login-logo-mark">🤙</span>
             <span class="login-logo-word">happy<b>net</b></span>
           </div>
           <div class="login-logo-sub"><i></i><span>TECHNOLOGIES</span><i></i></div>
+          <div class="login-brand-tag">FINANCE OPERATING SYSTEM <span>•</span> BUILT FOR MOMENTUM</div>
         </div>
       </div>
       <div class="login-panel">
@@ -118,6 +109,7 @@ function renderLogin(errMsg){
           </div>
 
           <div class="login-hero-chart">${LOGIN_CHART_SVG}</div>
+          <div class="login-proof-row"><span><b>01</b> Clarity in every entry</span><span><b>02</b> Decisions with context</span></div>
         </div>
 
         <div class="login-security">
@@ -128,6 +120,7 @@ function renderLogin(errMsg){
 
       <div class="login-panel">
         <div class="login-card">
+          <div class="login-card-eyebrow"><span></span> SECURE WORKSPACE ACCESS</div>
           <div class="login-card-icon">${ICON_SIGNAL}</div>
           ${loginResetMode ? `
           <p class="login-title">Reset your password</p>
@@ -230,28 +223,18 @@ function renderLogin(errMsg){
     googleBtn.disabled = true;
     googleBtn.innerHTML = 'Redirecting to Google…';
     try{
-      const res = await fetch('/api/google-oauth-start', {
-        method:'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-      const rawText = await res.text();
-      let body = {};
-      if(rawText){
-        try { body = JSON.parse(rawText); }
-        catch(err){
-          const looksLikeHtml = rawText.trim().startsWith('<');
-          const message = looksLikeHtml
-            ? 'Google sign-in is not available on this server configuration. Please use email and password instead.'
-            : 'Could not start Google sign-in.';
-          throw new Error(message);
-        }
+      const response = await withAuthTimeout(fetch('/api/google-oauth-start', {
+        headers:{ Accept:'application/json' }
+      }));
+      const body = await response.json().catch(()=>({}));
+      if(!response.ok || !body.url){
+        throw new Error(body.error || 'Google sign-in is not fully configured yet.');
       }
-      if(!res.ok || !body.url) throw new Error(body.error || 'Could not start Google sign-in.');
-      window.location.href = body.url; // hands off to Google — this tab navigates away
+      window.location.assign(body.url);
     }catch(e){
       googleBtn.disabled = false;
       googleBtn.innerHTML = originalHtml;
-      renderLogin(e.message);
+      renderLogin(authErrorMessage(e));
     }
   });
   const backToSignin = document.getElementById('back-to-signin');
@@ -318,6 +301,11 @@ function renderLogin(errMsg){
 async function startApp(){
   const s = getSession();
   if(!s){ renderLogin(); return; }
+  if(!await restoreAuthSession(s)){
+    setSession(null);
+    renderLogin('Your session expired — please sign in again.');
+    return;
+  }
   currentUserEmail = s.user ? s.user.email : '';
   root().innerHTML = `<div class="loading-screen">Loading Happynet…</div>`;
   try{

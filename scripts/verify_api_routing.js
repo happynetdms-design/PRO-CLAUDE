@@ -1,6 +1,6 @@
 /*
  * API Routing Diagnostic
- * Validates that the Netlify Functions are properly routed and return JSON
+ * Validates that local API handlers are routed through Vite and return JSON
  * Usage: npm run verify:api-routing
  */
 
@@ -10,10 +10,12 @@ const endpoints = [
   { method: 'GET', path: '/api/branches', desc: 'Branches list' },
   { method: 'GET', path: '/api/google-oauth-start', desc: 'Google OAuth start' }
 ];
+const apiPort = process.env.API_PORT || process.env.PORT || '4173';
+const apiBaseUrl = `http://localhost:${apiPort}`;
 
 async function testEndpoint(method, path) {
   try {
-    const response = await fetch(`http://localhost:3000${path}`, {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
       method,
       headers: { 'Accept': 'application/json' }
     });
@@ -27,7 +29,7 @@ async function testEndpoint(method, path) {
       isJson,
       isHtml,
       contentType: response.headers.get('content-type') || 'unknown',
-      error: isHtml ? 'Returns HTML instead of JSON (routing issue)' : null,
+      error: isHtml ? 'Returns HTML instead of JSON (routing issue)' : !isJson ? 'Response is not valid JSON' : null,
       preview: text.substring(0, 100)
     };
   } catch (e) {
@@ -59,7 +61,8 @@ async function testEndpoint(method, path) {
         console.log(`  ✗ ERROR: Returns HTML! Check netlify.toml redirects.`);
         issueCount++;
       } else {
-        console.log(`  ? Unknown response type`);
+        console.log(`  ✗ ERROR: ${result.error}`);
+        issueCount++;
       }
     } else {
       console.log(`  ✗ ERROR: ${result.error}`);
@@ -72,8 +75,8 @@ async function testEndpoint(method, path) {
     console.log('\n✓ All endpoints are properly configured and returning JSON!\n');
   } else {
     console.log(`\n✗ Found ${issueCount} issue(s). Check that:\n`);
-    console.log('  1. netlify.toml has /api/* redirect BEFORE /* redirect');
-    console.log('  2. Netlify Functions are properly deployed');
-    console.log('  3. The development server (if local) has functions enabled\n');
+    console.log('  1. Vite is running on the configured port');
+    console.log('  2. vite.config.js can load the local API handlers');
+    console.log('  3. Production deployment has the required server environment variables\n');
   }
 })();

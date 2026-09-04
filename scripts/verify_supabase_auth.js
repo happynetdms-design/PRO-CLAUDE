@@ -9,7 +9,6 @@ const SUPABASE_URL = 'https://xwbwabxqtnzsxcjhnmzc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3YndhYnhxdG56c3hjamhubXpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxODE5MDIsImV4cCI6MjEwMzc1NzkwMn0.MQWeXkA9dYcdAqhOOrlnmiT9Eryy6Mymcdto4jOFK7c';
 const EMAIL = 'admin@happy.com';
 const PASSWORD = '12345678';
-const USER_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const ROLES = new Set(['owner','finance_manager','accountant','branch_manager','auditor','viewer']);
 
 function headers(token){
@@ -43,9 +42,7 @@ async function json(res){
     if(!authBody.access_token || !authBody.refresh_token || !authBody.user || !authBody.user.id){
       throw new Error('Auth returned an incomplete session payload.');
     }
-    if(authBody.user.id !== USER_ID) throw new Error(`Unexpected user id: ${authBody.user.id}`);
-
-    const accessRes = await request(`/rest/v1/user_branch_access?select=branch_id,role&user_id=eq.${encodeURIComponent(USER_ID)}`, { token:authBody.access_token });
+    const accessRes = await request(`/rest/v1/user_branch_access?select=branch_id,role&user_id=eq.${encodeURIComponent(authBody.user.id)}`, { token:authBody.access_token });
     const accessBody = await json(accessRes);
     if(!accessRes.ok) throw new Error(`Access query failed (${accessRes.status}): ${accessBody.message || accessBody.details || 'unknown error'}`);
     const valid = (Array.isArray(accessBody) ? accessBody : []).filter(row => row.branch_id && ROLES.has(row.role));

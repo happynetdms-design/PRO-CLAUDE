@@ -37,31 +37,9 @@ exports.handler = async (event) => {
         }
       }
 
-      // Bulk import (multiple entries in one call) treats "a revenue entry
-      // already exists for this date" as a duplicate to skip, reported
-      // back per row — same shape as expenses.js's bulk import, so a
-      // second upload of an overlapping period never double-counts a
-      // day's revenue. A single manual add (the everyday "Add Revenue"
-      // form, one entry, no dedup expected) skips this check entirely —
-      // there's no unique constraint on date, by design, since someone
-      // may legitimately want more than one entry for a day.
-      let skipDates = new Set();
-      if(rows.length > 1){
-        const dates = rows.map(r => r.entry_date);
-        const { data: existing, error: existErr } = await admin
-          .from('revenue_entries').select('entry_date')
-          .eq('branch_id', branchId).eq('is_deleted', false).in('entry_date', dates);
-        if(existErr) return json(500, { error: existErr.message });
-        skipDates = new Set((existing||[]).map(e => e.entry_date));
-      }
-
       const inserted = [];
       const skipped = [];
       for(const r of rows){
-        if(skipDates.has(r.entry_date)){
-          skipped.push({ row: r, reason: `A revenue entry already exists for ${r.entry_date} — skipped to avoid double-counting.` });
-          continue;
-        }
         const payload = {
           ...(r.id ? { id: r.id } : {}),
           branch_id: branchId, entry_date: r.entry_date,
@@ -72,7 +50,6 @@ exports.handler = async (event) => {
         const { data, error } = await admin.from('revenue_entries').insert(payload).select().maybeSingle();
         if(error){ skipped.push({ row: r, reason: error.message }); continue; }
         inserted.push(data);
-        skipDates.add(r.entry_date); // guard against two rows in the same batch targeting the same date
       }
       return json(201, { inserted, skipped, revenue: inserted }); // `revenue` kept for any existing caller expecting the old single-array shape
     }

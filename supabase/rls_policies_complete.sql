@@ -12,6 +12,27 @@
 --   write = Head Office OR branch_manager/accountant
 -- ============================================================================
 
+-- ---- expenses ----
+alter table public.expenses enable row level security;
+drop policy if exists "expenses read" on public.expenses;
+create policy "expenses read" on public.expenses for select to authenticated
+  using (public.is_head_office() or public.has_branch_role(branch_id, array['branch_manager','accountant','auditor','viewer']::public.user_role[]));
+drop policy if exists "expenses write" on public.expenses;
+create policy "expenses write" on public.expenses for insert to authenticated
+  with check (
+    public.is_head_office()
+    or public.has_branch_role(branch_id, array['branch_manager']::public.user_role[])
+    or (status = 'pending_approval' and public.has_branch_role(branch_id, array['accountant']::public.user_role[]))
+  );
+drop policy if exists "expenses update" on public.expenses;
+create policy "expenses update" on public.expenses for update to authenticated
+  using (public.is_head_office() or public.has_branch_role(branch_id, array['branch_manager','accountant']::public.user_role[]))
+  with check (
+    public.is_head_office()
+    or public.has_branch_role(branch_id, array['branch_manager']::public.user_role[])
+    or (status = 'pending_approval' and public.has_branch_role(branch_id, array['accountant']::public.user_role[]))
+  );
+
 -- ---- financial_accounts ----
 alter table public.financial_accounts enable row level security;
 drop policy if exists "accounts read" on public.financial_accounts;

@@ -1,13 +1,25 @@
 /* ---------------- Suppliers & Bills (Accounts Payable) ---------------- */
 let billsState = { loading:false, bills:null, suppliers:null, aging:null, error:null, formError:null, view:'bills', statement:null };
 
+async function parseBillsResponse(response, fallbackMessage){
+  const body = await safeParseJson(response);
+  if(!response.ok){
+    const message = body.error || fallbackMessage;
+    if(/relation .* does not exist|function .* does not exist|column .* does not exist|accounts payable|v_hfms_ap_|bill/i.test(message)){
+      throw new Error(`${message} Run supabase/hfms_foundation_fix_04_accounts_payable.sql against Supabase, then reload.`);
+    }
+    throw new Error(message);
+  }
+  return body;
+}
+
 async function loadBills(){
   billsState.loading = true; render();
   try{
     const [billsRes, suppliersRes, agingRes] = await Promise.all([
-      apiFetch(`/api/bills?branch_id=${state.branchId}`, { method:'GET' }).then(r=>r.json()),
-      apiFetch(`/api/suppliers?branch_id=${state.branchId}`, { method:'GET' }).then(r=>r.json()),
-      apiFetch(`/api/bills?branch_id=${state.branchId}&action=aging`, { method:'GET' }).then(r=>r.json())
+      apiFetch(`/api/bills?branch_id=${state.branchId}`, { method:'GET' }).then(r=>parseBillsResponse(r, 'Could not load bills.')),
+      apiFetch(`/api/suppliers?branch_id=${state.branchId}`, { method:'GET' }).then(r=>parseBillsResponse(r, 'Could not load suppliers.')),
+      apiFetch(`/api/bills?branch_id=${state.branchId}&action=aging`, { method:'GET' }).then(r=>parseBillsResponse(r, 'Could not load bill aging.'))
     ]);
     billsState.bills = billsRes.bills || [];
     billsState.suppliers = suppliersRes.suppliers || [];
@@ -23,16 +35,15 @@ async function addSupplier(name, contact, kraPin){
   billsState.formError = null;
   try{
     const res = await apiFetch('/api/suppliers', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, name, contact, kra_pin: kraPin || undefined }) });
-    const body = await res.json();
-    if(!res.ok) throw new Error(body.error || 'Could not add supplier.');
+    const body = await parseBillsResponse(res, 'Could not add supplier.');
     await loadBills();
   }catch(e){ billsState.formError = e.message; render(); }
 }
 async function loadSupplierStatement(supplierId){
   try{
     const [stmtRes, docsRes] = await Promise.all([
-      apiFetch(`/api/suppliers?action=statement&supplier_id=${supplierId}`, { method:'GET' }).then(r=>r.json()),
-      apiFetch(`/api/suppliers?action=documents&supplier_id=${supplierId}`, { method:'GET' }).then(r=>r.json())
+      apiFetch(`/api/suppliers?action=statement&supplier_id=${supplierId}`, { method:'GET' }).then(r=>parseBillsResponse(r, 'Could not load the supplier statement.')),
+      apiFetch(`/api/suppliers?action=documents&supplier_id=${supplierId}`, { method:'GET' }).then(r=>parseBillsResponse(r, 'Could not load supplier documents.'))
     ]);
     const supplier = (billsState.suppliers||[]).find(s=>s.id===supplierId);
     billsState.statement = { supplierId, supplierName: supplier ? supplier.name : '', rows: stmtRes.statement || [], documents: docsRes.documents || [] };
@@ -53,8 +64,7 @@ async function uploadSupplierDocument(supplierId, file){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, supplier_id: supplierId, label: file.name, file_name: file.name, content_type: file.type, data_base64: base64 })
     });
-    const body = await res.json();
-    if(!res.ok) throw new Error(body.error || 'Could not upload this document.');
+    const body = await parseBillsResponse(res, 'Could not upload this document.');
     await loadSupplierStatement(supplierId);
   }catch(e){ showToast('Upload failed: ' + e.message, 'error'); }
 }
@@ -91,8 +101,7 @@ async function addBill(payload){
   billsState.formError = null;
   try{
     const res = await apiFetch('/api/bills', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, ...payload }) });
-    const body = await res.json();
-    if(!res.ok) throw new Error(body.error || 'Could not add bill.');
+    const body = await parseBillsResponse(res, 'Could not add bill.');
     await loadBills();
   }catch(e){ billsState.formError = e.message; render(); }
 }
@@ -100,8 +109,7 @@ async function approveBill(id){
   if(!(await confirmDialog('Approve this bill? This posts it to the ledger as an expense against Accounts Payable.'))) return;
   try{
     const res = await apiFetch(`/api/bills?action=approve`, { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId, id }) });
-    const body = await res.json();
-    if(!res.ok) throw new Error(body.error || 'Could not approve bill.');
+    const body = await parseBillsResponse(res, 'Could not approve bill.');
     await loadBills();
   }catch(e){ showToast('Could not approve: ' + e.message, 'error'); }
 }
@@ -117,8 +125,7 @@ async function payBill(billId, total, outstanding){
       method:'POST', headers: JSONH,
       body: JSON.stringify({ branch_id: state.branchId, bill_id: billId, payment_date: todayISO(), amount_kes: amount, account_name: account })
     });
-    const body = await res.json();
-    if(!res.ok) throw new Error(body.error || 'Could not record payment.');
+    const body = await parseBillsResponse(res, 'Could not record payment.');
     await loadBills();
   }catch(e){ showToast('Could not record payment: ' + e.message, 'error'); }
 }
@@ -132,7 +139,7 @@ function viewBills(){
     <div class="topbar"><div><h1>Suppliers &amp; Bills</h1><div class="sub">Accounts Payable — bill, approve, pay, track aging. Posts real double-entry to the ledger on approval and payment.</div></div></div>
 
     ${loading && !bills ? `<div class="card"><span class="hint">Loading…</span></div>` : ''}
-    ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div><div class="hint">This needs <code>hfms_foundation_fix_04_accounts_payable.sql</code> run against Supabase first.</div></div>` : ''}
+    ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div></div>` : ''}
     ${formError ? `<div class="hint" style="color:#c0392b; margin-bottom:10px;">${formError}</div>` : ''}
 
     ${bills ? `
