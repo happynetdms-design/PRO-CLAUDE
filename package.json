@@ -4,6 +4,7 @@
   "private": true,
   "description": "Happynet Profit First Dashboard — Netlify Functions + Supabase backend",
   "scripts": {
+    "build": "vite build",
     "dev": "vite --port 4173",
     "start": "vite --port 4173",
     "preview": "vite preview --port 4173"

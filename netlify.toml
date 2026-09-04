@@ -1,7 +1,7 @@
 [build]
   publish = "."
   functions = "netlify/functions"
-  command = "npm install"
+  command = "npm run build"
 
 [build.environment]
   # Netlify Functions need native fetch (Node 18+) for netlify/functions/ai-assistant.js
