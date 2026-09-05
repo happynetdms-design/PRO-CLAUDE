@@ -66,7 +66,7 @@ begin
   if ft.is_deleted or ft.classification_status <> 'classified' or ft.net_amount_kes <= 0 then
     return null;
   end if;
-  if public.hfms_period_is_closed(ft.branch_id, ft.transaction_date) then
+  if public.hfms_period_is_closed(ft.branch_id, ft.transaction_date::date) then
     -- Don't post into a closed period silently — leave it unposted so a
     -- human notices, rather than raising and risking a caller's transaction.
     return null;
@@ -152,7 +152,8 @@ $$;
 -- ----------------------------------------------------------------------------
 -- RUN THIS to actually post everything the backfill created:
 -- ----------------------------------------------------------------------------
-select public.hfms_post_all_unposted_transactions() as entries_posted;
+-- Run this explicitly after seeding each branch's chart of accounts:
+-- select public.hfms_post_all_unposted_transactions() as entries_posted;
 
 -- ----------------------------------------------------------------------------
 -- VERIFICATION — this is the one that actually proves the books balance.
