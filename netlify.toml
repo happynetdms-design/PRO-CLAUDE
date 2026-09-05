@@ -24,12 +24,6 @@
   to = "/.netlify/functions/:splat"
   status = 200
 
-# Exclude Netlify internal paths from SPA redirect
-[[redirects]]
-  from = "/.netlify/*"
-  to = "/.netlify/:splat"
-  status = 200
-
 # Single page app — everything else is served from index.html
 [[redirects]]
   from = "/*"
