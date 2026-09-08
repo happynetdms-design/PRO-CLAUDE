@@ -1,6 +1,14 @@
 # Production Supabase Deployment
 
-Run these files in Supabase SQL Editor, one file at a time, in this order:
+Preferred deployment: run `supabase/happynet_production.sql` with `psql` from
+the repository root, for example `psql "$DATABASE_URL" -f
+supabase/happynet_production.sql`. It includes the base schema,
+storage/RLS setup, every foundation migration, relationship repairs, branch
+chart seeding, transaction backfill, and post-migration checks in one
+transaction.
+
+Supabase SQL Editor does not support psql `\ir` includes. If SQL Editor is
+required, run the component files manually in the legacy order below:
 
 1. `hfms_schema_v2.sql`
 2. `storage_setup.sql`

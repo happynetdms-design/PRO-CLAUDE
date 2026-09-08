@@ -6,7 +6,7 @@ async function parseBillsResponse(response, fallbackMessage){
   if(!response.ok){
     const message = body.error || fallbackMessage;
     if(/relation .* does not exist|function .* does not exist|column .* does not exist|accounts payable|v_hfms_ap_|bill/i.test(message)){
-      throw new Error(`${message} Run supabase/hfms_foundation_fix_04_accounts_payable.sql against Supabase, then reload.`);
+      throw new Error(`${message} Run supabase/happynet_production.sql against Supabase, then reload.`);
     }
     throw new Error(message);
   }

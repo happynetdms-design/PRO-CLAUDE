@@ -76,7 +76,7 @@ function viewExecutive(){
     <div class="topbar"><div><h1>Executive Dashboard</h1><div class="sub">Facts and calculations only, pulled live from the ledger, AP, and loans — no AI-generated commentary here, that's a separate concern.</div></div></div>
 
     ${loading ? `<div class="card"><span class="hint">Loading…</span></div>` : ''}
-    ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div><div class="hint">Needs the ledger foundation SQL run against Supabase first.</div></div>` : ''}
+    ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div><div class="hint">Run supabase/happynet_production.sql against Supabase first, then reload.</div></div>` : ''}
 
     ${data ? `
     ${data.risks.length ? `

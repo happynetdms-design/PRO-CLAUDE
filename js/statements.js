@@ -243,7 +243,7 @@ function viewStatements(){
     ${error ? `
       <div class="card">
         <div class="hint" style="color:#c0392b; margin-bottom:8px;">${error}</div>
-        <div class="hint">If this is the first time you're viewing this, the ledger foundation SQL (<code>hfms_foundation_fix_01_ledger_sync.sql</code> and <code>_02_journal_posting.sql</code>) may not have been run against this branch's Supabase project yet — these statements read from tables those files create.</div>
+        <div class="hint">Run <code>supabase/happynet_production.sql</code> against Supabase first, then reload. These statements read from the ledger tables created by that migration.</div>
       </div>` : ''}
 
     ${data ? `
