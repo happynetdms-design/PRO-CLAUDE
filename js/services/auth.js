@@ -7,7 +7,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const SESSION_KEY = 'happynet_session';
 const LAST_ACTIVITY_KEY = 'happynet_last_activity';
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
-const LOGIN_URL = 'https://peoplenprofit.com/login';
+const LOGIN_URL = '/login';
 const ALLOWED_USER_ROLES = new Set(['owner','finance_manager','accountant','branch_manager','auditor','viewer']);
 
 function waitForAuth(milliseconds){
@@ -125,9 +125,10 @@ function hasSessionExpiredFromInactivity(){
 }
 
 function redirectToLogin(reason){
-  const next = encodeURIComponent(window.location.href);
-  const target = `${LOGIN_URL}?next=${next}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`;
-  if(window.location.href !== target) window.location.href = target;
+  const currentPath = `${window.location.pathname}${window.location.search}`;
+  const target = `${LOGIN_URL}${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`;
+  if(currentPath === target || window.location.pathname === '/login') return;
+  window.location.assign(target);
 }
 
 function enforceSessionTimeout(){

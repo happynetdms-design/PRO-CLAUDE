@@ -80,10 +80,6 @@ function renderLogin(errMsg){
   history.replaceState({}, '', '/login');
   errMsg = errMsg || verificationMsg;
   verificationMsg = null;
-  if(!window.location.href.startsWith('https://peoplenprofit.com/login') && !window.location.hostname.includes('localhost')){
-    redirectToLogin('signed_out');
-    return;
-  }
   root().innerHTML = `
     <div id="view-login" class="login-wrap view-section">
       <div class="login-hero">
