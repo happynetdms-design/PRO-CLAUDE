@@ -2,6 +2,23 @@
 const ROLE_OPTIONS = ['owner','finance_manager','accountant','branch_manager','auditor','viewer'];
 let staffState = { branches:null, grants:null, loading:false, error:null, formError:null };
 
+function normalizeBranchList(branches){
+  if(!Array.isArray(branches)) return [];
+  return branches
+    .map(branch => {
+      const id = branch && (branch.id || branch.branch_id || branch.uuid || null);
+      const branchId = branch && (branch.branch_id || branch.id || branch.uuid || null);
+      return {
+        ...branch,
+        id,
+        branch_id: branchId,
+        name: branch && (branch.name || branch.branch_name || 'Unnamed branch'),
+        code: branch && (branch.code || '')
+      };
+    })
+    .filter(branch => !!(branch.id || branch.branch_id));
+}
+
 async function loadStaffData(){
   staffState.loading = true; staffState.error = null; render();
   try{
@@ -9,8 +26,16 @@ async function loadStaffData(){
       apiFetch('/api/branches', { method:'GET' }).then(safeParseJson),
       apiFetch('/api/staff', { method:'GET' }).then(safeParseJson)
     ]);
-    staffState.branches = branchesRes.branches || [];
-    staffState.grants = staffRes.grants || [];
+
+    const apiBranches = normalizeBranchList(branchesRes && branchesRes.branches);
+    const stateBranches = normalizeBranchList(state && state.allBranches);
+    const branches = apiBranches.length ? apiBranches : stateBranches;
+
+    staffState.branches = branches;
+    staffState.grants = Array.isArray(staffRes && staffRes.grants) ? staffRes.grants : [];
+    if(!branches.length && !(staffRes && Array.isArray(staffRes.grants) && staffRes.grants.length)){
+      staffState.error = branchesRes && branchesRes.error ? branchesRes.error : null;
+    }
   }catch(e){
     staffState.error = e.message.includes('SUPABASE_SERVICE_ROLE_KEY')
       ? 'Local API is missing SUPABASE_SERVICE_ROLE_KEY. Add the server-only key to .env.local and restart Vite.'

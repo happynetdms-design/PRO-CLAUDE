@@ -120,7 +120,7 @@ function viewStaff(){
     <div class="card" style="margin-bottom:22px;">
       ${loading && !branches ? `<span class="hint">Loading…</span>` : (branches && branches.length ? `
         <table style="margin-bottom:16px;"><thead><tr><th>Name</th><th>Code</th></tr></thead>
-        <tbody>${branches.map(b=>`<tr><td>${b.name}</td><td class="txt">${b.code}</td></tr>`).join('')}</tbody></table>
+        <tbody>${branches.map(b=>`<tr><td>${b.name}</td><td class="txt">${b.code || ''}</td></tr>`).join('')}</tbody></table>
       ` : `<div class="hint" style="margin-bottom:16px;">No branches yet.</div>`)}
       <form id="form-add-branch" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
         <div><label style="display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:4px;">Branch name</label><input type="text" name="name" placeholder="e.g. Kisumu Branch" required></div>
@@ -140,9 +140,9 @@ function viewStaff(){
           ${(grants||[]).length===0 ? `<tr class="empty-row"><td colspan="4">No access grants yet.</td></tr>` : (grants||[]).map(g=>`
             <tr>
               <td class="txt">${g.email || '(unknown)'}</td>
-              <td class="txt">${g.branches ? g.branches.name : ''}</td>
-              <td class="txt" style="text-transform:capitalize;">${g.role.replace(/_/g,' ')}</td>
-              <td><button class="btn ghost sm" data-revoke-user="${g.user_id}" data-revoke-branch="${g.branch_id}">Revoke</button></td>
+              <td class="txt">${g.branches ? g.branches.name : (g.branch_name || '')}</td>
+              <td class="txt" style="text-transform:capitalize;">${(g.role || '').replace(/_/g,' ')}</td>
+              <td><button class="btn ghost sm" data-revoke-user="${g.user_id}" data-revoke-branch="${g.branch_id || g.branchId || ''}">Revoke</button></td>
             </tr>`).join('')}
         </tbody>
       </table></div>`}
@@ -150,7 +150,7 @@ function viewStaff(){
       <form id="form-grant-access" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:18px; padding-top:18px; border-top:1px solid var(--hair);">
         <div><label style="display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:4px;">Email (must already have a Supabase account)</label><input type="email" name="email" placeholder="person@happynet.co.ke" required></div>
         <div><label style="display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:4px;">Branch</label>
-          <select name="branch_id" required>${(branches||[]).map(b=>`<option value="${b.id}">${b.name}</option>`).join('')}</select>
+          <select name="branch_id" required>${(branches||[]).map(b=>`<option value="${b.branch_id || b.id}">${b.name}</option>`).join('')}</select>
         </div>
         <div><label style="display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:4px;">Role</label>
           <select name="role" required>${ROLE_OPTIONS.map(r=>`<option value="${r}">${r.replace(/_/g,' ')}</option>`).join('')}</select>

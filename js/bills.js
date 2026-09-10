@@ -2,13 +2,19 @@
 let billsState = { loading:false, bills:null, suppliers:null, aging:null, error:null, formError:null, view:'bills', statement:null };
 
 async function parseBillsResponse(response, fallbackMessage){
-  const body = await safeParseJson(response);
+  let body;
+  try {
+    body = await safeParseJson(response);
+  } catch (error) {
+    throw new Error(normalizeFetchFailure(error && error.message, fallbackMessage));
+  }
+
   if(!response.ok){
     const message = body.error || fallbackMessage;
     if(/relation .* does not exist|function .* does not exist|column .* does not exist|accounts payable|v_hfms_ap_|bill/i.test(message)){
       throw new Error(`${message} Run supabase/happynet_production.sql against Supabase, then reload.`);
     }
-    throw new Error(message);
+    throw new Error(normalizeFetchFailure(message, fallbackMessage));
   }
   return body;
 }
@@ -26,7 +32,7 @@ async function loadBills(){
     billsState.aging = agingRes.aging || [];
     billsState.error = null;
   }catch(e){
-    billsState.error = e.message;
+    billsState.error = normalizeFetchFailure(e && e.message, 'Could not load suppliers and bills. Check your connection and try again.');
   }
   billsState.loading = false;
   render();

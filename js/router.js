@@ -82,7 +82,10 @@ function renderCurrentRoute(){
     renderLogin();
     return;
   }
-  if(route.tab && typeof state !== 'undefined' && state) render();
+  if(route.tab && typeof state !== 'undefined' && state){
+    loadTabData(route.tab);
+    render();
+  }
 }
 
 function navigateTo(path){

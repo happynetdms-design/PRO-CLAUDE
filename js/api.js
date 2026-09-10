@@ -2,6 +2,19 @@
 
 const JSONH = { 'Content-Type': 'application/json' };
 
+function normalizeFetchFailure(message, fallback = 'Could not reach the server. Check your connection and try again.'){
+  const msg = String(message || '').trim();
+  if(!msg) return fallback;
+  const lower = msg.toLowerCase();
+  if(lower === 'failed to fetch' || lower.includes('networkerror') || lower.includes('load failed') || lower.includes('fetch failed')){
+    return fallback;
+  }
+  if(lower.includes('server returned an error page instead of json') || lower.includes('invalid json response from server')){
+    return 'The server returned an unexpected response. Check the API routing and refresh the page.';
+  }
+  return msg;
+}
+
 // Safe JSON parser that handles HTML error responses (e.g., from misconfigured routing)
 async function safeParseJson(response){
   const text = await response.text();
@@ -28,11 +41,15 @@ async function apiFetch(path, options = {}, retried = false){
     if(token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(path, { ...options, headers });
-  if(response.status === 401 && !retried && typeof apiRefresh === 'function'){
-    if(await apiRefresh()) return apiFetch(path, options, true);
+  try{
+    const response = await fetch(path, { ...options, headers });
+    if(response.status === 401 && !retried && typeof apiRefresh === 'function'){
+      if(await apiRefresh()) return apiFetch(path, options, true);
+    }
+    return response;
+  }catch(error){
+    throw new Error(normalizeFetchFailure(error && error.message, 'Could not reach the server while loading suppliers and bills. Check your connection and try again.'));
   }
-  return response;
 }
 
 // 1. Session & Access
