@@ -47,10 +47,10 @@ body{
   font-family:'Inter',system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;
   min-height:100vh;
-  overflow:hidden;
+  overflow:auto;
 }
-#root{height:100vh;}
+#root{min-height:100vh; height:auto;}
 .num{font-family:'IBM Plex Mono',monospace; font-weight:500; letter-spacing:-0.01em;}
 h1,h2,h3,.display{font-family:'Fraunces',serif;}
-.app{display:flex; width:100%; height:100vh; min-height:100vh; align-items:stretch; overflow:hidden; min-width:0; background:var(--paper);}
+.app{display:flex; width:100%; min-height:100vh; align-items:stretch; overflow:visible; min-width:0; background:var(--paper);}
 
