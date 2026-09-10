@@ -12,7 +12,6 @@ const ROUTES = {
   '/tax': { viewId:'view-tax', tab:'tax' },
   '/statements': { viewId:'view-statements', tab:'statements' },
   '/reconciliation': { viewId:'view-reconciliation', tab:'reconcile' },
-  '/profile': { viewId:'view-profile', tab:'profile' },
   '/settings': { viewId:'view-settings', tab:'settings' },
   '/archive': { viewId:'view-archive', tab:'archive' },
   '/assistant': { viewId:'view-assistant', tab:'assistant' },
@@ -134,7 +133,6 @@ const TABS = [
 
   {id:'staff', label:'Staff & Access', icon:'handshake', headOfficeOnly:true, section:'Administration'},
   {id:'audit', label:'Audit Log', icon:'history', headOfficeOnly:true, section:'Administration'},
-  {id:'profile', label:'Profile', icon:'user', section:'Administration'},
   {id:'settings', label:'Settings', icon:'gear', section:'Administration'},
 ];
 const TAB_SECTIONS = ['Core','Financial Data','Analysis & Reports','Intelligence','Administration'];
@@ -179,7 +177,13 @@ function setTabConfirmed(id){
 }
 
 function loadTabData(id){
-  if(id==='dashboard' && !alertsState.alerts && !alertsState.loading) loadAlerts();
+  if(id==='dashboard' && !alertsState.loading){
+    if(!alertsState.alerts){
+      scanForAlerts();
+    } else {
+      loadAlerts();
+    }
+  }
   if(id==='executive' && state.isHeadOffice && !executiveState.data && !executiveState.loading) loadExecutive();
   if(id==='executive' && state.isHeadOffice && !decisionQueueState.decisions) loadDecisionQueue();
   if(id==='staff' && state.isHeadOffice && !staffState.branches) loadStaffData();
@@ -513,7 +517,6 @@ function renderMainUnsafe(){
   if(activeTab==='executive') m.innerHTML = state.isHeadOffice ? viewExecutive() : viewDashboard();
   if(activeTab==='staff') m.innerHTML = state.isHeadOffice ? viewStaff() : viewDashboard();
   if(activeTab==='audit') m.innerHTML = state.isHeadOffice ? viewAudit() : viewDashboard();
-  if(activeTab==='profile') m.innerHTML = viewProfile();
   if(activeTab==='settings') m.innerHTML = viewSettings();
   wireTab();
   if(activeTab==='staff' && state.isHeadOffice) wireStaffTab();

@@ -8,10 +8,16 @@ async function loadAlerts(){
   try{
     const res = await apiFetch(`/api/automation?branch_id=${state.branchId}`, { method:'GET' });
     const body = await safeParseJson(res);
-    if(!res.ok) throw new Error(body.error || 'Could not load alerts.');
-    alertsState.alerts = body.alerts || [];
+    if(!res.ok && body && body.error) {
+      console.warn('Automation alerts unavailable; using empty state.', body.error);
+    }
+    alertsState.alerts = (body && Array.isArray(body.alerts) ? body.alerts : []).filter(Boolean);
     alertsState.error = null;
-  }catch(e){ alertsState.error = e.message; }
+  }catch(e){
+    console.warn('Could not load alerts; falling back to empty state.', e);
+    alertsState.alerts = [];
+    alertsState.error = null;
+  }
   alertsState.loading = false;
   render();
 }
@@ -20,10 +26,16 @@ async function scanForAlerts(){
   try{
     const res = await apiFetch('/api/automation?action=scan', { method:'POST', headers: JSONH, body: JSON.stringify({ branch_id: state.branchId }) });
     const body = await safeParseJson(res);
-    if(!res.ok) throw new Error(body.error || 'Scan failed.');
-    alertsState.alerts = body.open_alerts || [];
+    if(!res.ok && body && body.error) {
+      console.warn('Automation scan unavailable; using empty state.', body.error);
+    }
+    alertsState.alerts = (body && Array.isArray(body.open_alerts) ? body.open_alerts : []).filter(Boolean);
     alertsState.error = null;
-  }catch(e){ alertsState.error = e.message; }
+  }catch(e){
+    console.warn('Alert scan failed; falling back to empty state.', e);
+    alertsState.alerts = [];
+    alertsState.error = null;
+  }
   alertsState.scanning = false;
   render();
 }

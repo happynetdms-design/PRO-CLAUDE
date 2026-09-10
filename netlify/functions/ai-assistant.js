@@ -44,31 +44,70 @@ async function buildFinancialSummary(admin, branchId){
   );
 
   const revenueByMonth = {};
+  let totalRevenue = 0;
   for(const r of (revenue || [])){
     const m = monthKey(r.entry_date);
-    revenueByMonth[m] = (revenueByMonth[m] || 0) + Number(r.amount_kes);
+    const val = Number(r.amount_kes || 0);
+    revenueByMonth[m] = (revenueByMonth[m] || 0) + val;
+    totalRevenue += val;
   }
+
   const expenseByMonth = {};
   const expenseByCategory = {};
   let ownerFundedTotal = 0;
+  let totalExpenses = 0;
   for(const e of (expenses || [])){
     const m = monthKey(e.expense_date);
-    const total = Number(e.amount_kes) + Number(e.charges_kes || 0);
+    const total = Number(e.amount_kes || 0) + Number(e.charges_kes || 0);
     expenseByMonth[m] = (expenseByMonth[m] || 0) + total;
+    totalExpenses += total;
     const cat = (e.categories && e.categories.name) || 'Uncategorized';
     expenseByCategory[cat] = (expenseByCategory[cat] || 0) + total;
     if(e.owner_funded) ownerFundedTotal += total;
   }
 
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonthRevenue = Number(revenueByMonth[currentMonth] || 0);
+  const currentMonthExpenses = Number(expenseByMonth[currentMonth] || 0);
+  const currentMonthNet = currentMonthRevenue - currentMonthExpenses;
+
+  const monthlyRevenueEntries = Object.entries(revenueByMonth).sort(([a],[b]) => a.localeCompare(b));
+  const monthlyExpenseEntries = Object.entries(expenseByMonth).sort(([a],[b]) => a.localeCompare(b));
+  const topExpenseCategories = Object.entries(expenseByCategory).sort(([,a],[,b]) => Number(b) - Number(a)).slice(0,5);
+  const ledgerSummary = (ledgerEntries || []).slice(0, 12).map(t => ({
+    date: t.transaction_date,
+    type: t.transaction_type,
+    direction: t.direction,
+    amount_kes: Number(t.net_amount_kes || 0),
+    description: t.description
+  }));
+  const recentAudit = (auditLog || []).slice(0, 12).map(a => ({
+    table: a.table_name,
+    action: a.action,
+    changed_at: a.changed_at,
+    changed_by: a.changed_by
+  }));
+
   const summary = {
     as_of: new Date().toISOString().slice(0, 10),
+    current_month: currentMonth,
     period_covered: `${cutoff} to today`,
+    total_revenue_kes_6m: totalRevenue,
+    total_expenses_kes_6m: totalExpenses,
+    net_revenue_after_expenses_kes_6m: totalRevenue - totalExpenses,
+    current_month_revenue_kes: currentMonthRevenue,
+    current_month_expenses_kes: currentMonthExpenses,
+    current_month_net_kes: currentMonthNet,
     monthly_revenue_kes: revenueByMonth,
     monthly_expenses_kes: expenseByMonth,
+    revenue_by_month_list: monthlyRevenueEntries,
+    expense_by_month_list: monthlyExpenseEntries,
     expenses_by_category_kes: expenseByCategory,
+    top_expense_categories_kes: Object.fromEntries(topExpenseCategories),
     owner_funded_expenses_kes_total: ownerFundedTotal,
     accounts: accounts || [],
-    ledger_transactions: ledgerEntries || [],
+    ledger_transactions: ledgerSummary,
+    recent_audit: recentAudit,
     audit: (auditLog || []).map(a => ({ table:a.table_name, action:a.action, changed_at:a.changed_at, changed_by:a.changed_by }))
   };
 
@@ -78,11 +117,13 @@ async function buildFinancialSummary(admin, branchId){
 const SYSTEM_PROMPT = `You are Happynet's financial assistant, limited to revenue, expenses, financial ledger accounts, ledger transactions, and audit history.
 
 Rules you must follow:
-1. Answer ONLY using the JSON financial summary provided in each message. Never invent, estimate, or assume a number that isn't in that data. If requested information is outside revenue, expenses, accounts, ledger, or audit history, say it is outside your current scope.
-2. Label every substantive claim with one of these, inline: FACT (a number straight from the data), CALCULATION (arithmetic you derived from the data), FORECAST (forward-looking — always state your assumptions), RECOMMENDATION (an action management could consider), or RISK (a concern worth flagging). Keep the labels light — a word in brackets is enough, not a heading for every sentence.
-3. Keep answers concise and concrete — use actual KES figures from the data, not vague language.
-4. You are not a licensed accountant or financial advisor.
-5. You cannot take any action — you can only explain and calculate. If asked to change data, point to the relevant app tab.`;
+1. Answer ONLY using the JSON financial summary provided in each message. Never invent, estimate, or assume a number that isn't in that data. If the requested information is outside revenue, expenses, accounts, ledger, or audit history, say it is outside your current scope.
+2. When there is data, answer in a business-summary format: start with the most relevant numbers for the question, then give the comparison or trend, then any practical implication. For example, if asked about the month, cite current month revenue, current month expenses, and net position; if asked about categories, cite the top categories; if asked about ledger movement, cite the recent transactions and what changed.
+3. Label every substantive claim with one of these, inline: FACT (a number straight from the data), CALCULATION (arithmetic you derived from the data), FORECAST (forward-looking — always state your assumptions), RECOMMENDATION (an action management could consider), or RISK (a concern worth flagging). Keep the labels light — a word in brackets is enough, not a heading for every sentence.
+4. Keep answers concise and concrete — use actual KES figures from the data, not vague language.
+5. If there is no relevant ledger, revenue, expense, or audit data for the branch, say that clearly and do not guess.
+6. You are not a licensed accountant or financial advisor.
+7. You cannot take any action — you can only explain and calculate. If asked to change data, point to the relevant app tab.`;
 
 exports.handler = async (event) => {
   if(event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed.' });
@@ -103,6 +144,14 @@ exports.handler = async (event) => {
 
   try{
     const summary = await buildFinancialSummary(admin, branchId);
+    const hasAnyData = !!(
+      (summary.monthly_revenue_kes && Object.keys(summary.monthly_revenue_kes).length) ||
+      (summary.monthly_expenses_kes && Object.keys(summary.monthly_expenses_kes).length) ||
+      (summary.accounts && summary.accounts.length) ||
+      (summary.ledger_transactions && summary.ledger_transactions.length) ||
+      (summary.audit && summary.audit.length)
+    );
+    const emptyDataNote = hasAnyData ? '' : '\n\nNo ledger data was found for this branch yet. If the ledger tables are not populated, say so clearly and do not invent numbers.';
 
     // Persistent conversation history — best-effort; if ai_conversations
     // hasn't been created yet (foundation-fix 07 not run), the assistant
@@ -124,7 +173,7 @@ exports.handler = async (event) => {
     const trimmedHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_TURNS) : [];
     const messages = [
       ...trimmedHistory.filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'),
-      { role: 'user', content: `Financial data summary (JSON):\n${JSON.stringify(summary)}\n\nQuestion: ${question}` }
+      { role: 'user', content: `Financial data summary (JSON):\n${JSON.stringify(summary)}\n\nQuestion: ${question}${emptyDataNote}` }
     ];
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {

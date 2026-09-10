@@ -5,6 +5,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
   auth: { persistSession:false, autoRefreshToken:false, detectSessionInUrl:false }
 });
 const SESSION_KEY = 'happynet_session';
+const LAST_ACTIVITY_KEY = 'happynet_last_activity';
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+const LOGIN_URL = 'https://peoplenprofit.com/login';
 const ALLOWED_USER_ROLES = new Set(['owner','finance_manager','accountant','branch_manager','auditor','viewer']);
 
 function waitForAuth(milliseconds){
@@ -92,20 +95,61 @@ async function resolveUserAccess(user){
 function getSession(){
   try{
     const fromSession = sessionStorage.getItem(SESSION_KEY);
-    if(fromSession) return JSON.parse(fromSession);
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    return fromSession ? JSON.parse(fromSession) : null;
   }catch(e){ return null; }
 }
 
 function setSession(s, remember){
-  if(remember === undefined) remember = !sessionStorage.getItem(SESSION_KEY);
   if(s){
-    if(remember){ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); sessionStorage.removeItem(SESSION_KEY); }
-    else { sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); localStorage.removeItem(SESSION_KEY); }
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
   }else{
     localStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(LAST_ACTIVITY_KEY);
   }
+}
+
+function updateLastActivity(){
+  if(!getSession()) return;
+  sessionStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+}
+
+function hasSessionExpiredFromInactivity(){
+  const s = getSession();
+  if(!s || !s.access_token) return true;
+  const lastActivity = Number(sessionStorage.getItem(LAST_ACTIVITY_KEY) || 0);
+  if(!lastActivity) return false;
+  return Date.now() - lastActivity > SESSION_TIMEOUT_MS;
+}
+
+function redirectToLogin(reason){
+  const next = encodeURIComponent(window.location.href);
+  const target = `${LOGIN_URL}?next=${next}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`;
+  if(window.location.href !== target) window.location.href = target;
+}
+
+function enforceSessionTimeout(){
+  const s = getSession();
+  if(!s || !s.access_token) {
+    redirectToLogin('signed_out');
+    return false;
+  }
+  if(hasSessionExpiredFromInactivity()){
+    setSession(null);
+    redirectToLogin('session_expired');
+    return false;
+  }
+  updateLastActivity();
+  return true;
+}
+
+function bindInactivityTracking(){
+  const events = ['click','keydown','mousemove','touchstart','scroll','input'];
+  events.forEach((eventName) => {
+    document.addEventListener(eventName, updateLastActivity, { passive: true });
+  });
 }
 
 function authErrorMessage(error){

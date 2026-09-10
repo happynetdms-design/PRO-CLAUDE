@@ -80,6 +80,10 @@ function renderLogin(errMsg){
   history.replaceState({}, '', '/login');
   errMsg = errMsg || verificationMsg;
   verificationMsg = null;
+  if(!window.location.href.startsWith('https://peoplenprofit.com/login') && !window.location.hostname.includes('localhost')){
+    redirectToLogin('signed_out');
+    return;
+  }
   root().innerHTML = `
     <div id="view-login" class="login-wrap view-section">
       <div class="login-hero">
@@ -179,7 +183,7 @@ function renderLogin(errMsg){
               <button type="button" class="toggle-pw" id="toggle-pw" aria-label="Show password">${ICON_EYE}</button>
             </div>
             <div class="login-row-between">
-              <label class="check-row" style="margin:0; text-transform:none; font-weight:500; color:var(--ink-soft);"><input type="checkbox" name="remember" checked style="margin:0;"> Remember me</label>
+              <label class="check-row" style="margin:0; text-transform:none; font-weight:500; color:var(--ink-soft);"><input type="checkbox" name="remember" style="margin:0;"> Remember me</label>
               <a id="forgot-password">Forgot Password?</a>
             </div>
             <button class="btn full" style="background:var(--ink); color:#fff;" type="submit">${ICON_LOCK_SM_WHITE}Sign In</button>
@@ -285,13 +289,28 @@ function renderLogin(errMsg){
 
 async function startApp(){
   const s = getSession();
-  if(!s){ renderLogin(); return; }
+  if(!s || !s.access_token){
+    redirectToLogin('signed_out');
+    return;
+  }
+  if(hasSessionExpiredFromInactivity()){
+    setSession(null);
+    redirectToLogin('session_expired');
+    return;
+  }
   if(!await restoreAuthSession(s)){
     setSession(null);
-    renderLogin('Your session expired — please sign in again.');
+    redirectToLogin('session_expired');
     return;
   }
   currentUserEmail = s.user ? s.user.email : '';
+  bindInactivityTracking();
+  setInterval(() => {
+    if(hasSessionExpiredFromInactivity()){
+      setSession(null);
+      redirectToLogin('session_expired');
+    }
+  }, 60 * 1000);
   root().innerHTML = `<div class="loading-screen">Loading Happynet…</div>`;
   try{
     await loadState();
@@ -359,5 +378,14 @@ window.addEventListener('unhandledrejection', (e)=>{
     return;
   }
   const s = getSession();
-  if(s){ await startApp(); } else { renderLogin(); }
+  if(s && s.access_token){
+    if(hasSessionExpiredFromInactivity()){
+      setSession(null);
+      redirectToLogin('session_expired');
+      return;
+    }
+    await startApp();
+  } else {
+    redirectToLogin('signed_out');
+  }
 })();

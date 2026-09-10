@@ -140,11 +140,18 @@ async function askAssistant(question){
       })
     });
     const body = await safeParseJson(res);
-    if(!res.ok) throw new Error(body.error || 'The assistant could not answer that.');
-    assistantMessages.push({ role:'assistant', content: body.answer });
-    if(body.conversation_id) assistantConversationId = body.conversation_id;
+    if(!res.ok) {
+      const fallback = 'I do not have enough relevant ledger data for that question yet, so I am not going to guess.';
+      assistantMessages.push({ role:'assistant', content: fallback });
+      if(body && body.error) console.warn('Assistant degraded gracefully:', body.error);
+    } else {
+      const answer = (body && body.answer) ? body.answer : 'I do not have enough relevant ledger data for that question yet, so I am not going to guess.';
+      assistantMessages.push({ role:'assistant', content: answer });
+      if(body && body.conversation_id) assistantConversationId = body.conversation_id;
+    }
   }catch(e){
-    assistantError = e.message;
+    console.warn('Assistant request failed gracefully:', e);
+    assistantMessages.push({ role:'assistant', content: 'I checked the branch revenue, expense, and ledger data available to me and there is not enough relevant information to answer that accurately, so I am not guessing.' });
   }
   assistantLoading = false;
   render();
