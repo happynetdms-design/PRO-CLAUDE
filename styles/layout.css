@@ -5,9 +5,10 @@
   position:sticky; top:0; height:100vh; max-height:100vh; min-height:0;
   overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
   border-right:1px solid rgba(217,164,65,.12);
+  scrollbar-gutter: stable;
 }
 .sidebar nav{
-  display:flex; flex-direction:column; gap:2px; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
+  display:flex; flex-direction:column; gap:2px; overflow:visible; overflow-x:hidden; overscroll-behavior:contain;
   padding-right:2px; flex:1 1 auto; min-height:0;
 }
 .sidebar::-webkit-scrollbar{width:5px;}
