@@ -8,6 +8,50 @@ let recoveryToken = null; // { accessToken, refreshToken } from a recovery link
 let recoveryMsg = null;
 let verificationMsg = null;
 
+function getPathname(){
+  const path = (window.location.pathname || '/').replace(/\/+$/, '');
+  return path === '' ? '/' : path;
+}
+
+function enforceRouteForSession(session){
+  const path = getPathname();
+  const isAuthRoute = path === '/login';
+
+  if(!session && !isAuthRoute){
+    history.replaceState(null, '', '/login');
+    return false;
+  }
+
+  if(session && (path === '/' || path === '/login')){
+    history.replaceState(null, '', '/dashboard');
+    return true;
+  }
+
+  return true;
+}
+
+function getPathname(){
+  const path = (window.location.pathname || '/').replace(/\/+$/, '');
+  return path === '' ? '/' : path;
+}
+
+function enforceRouteForSession(session){
+  const path = getPathname();
+  const isAuthRoute = path === '/login';
+
+  if(!session && !isAuthRoute){
+    history.replaceState(null, '', '/login');
+    return false;
+  }
+
+  if(session && (path === '/' || path === '/login')){
+    history.replaceState(null, '', '/dashboard');
+    return true;
+  }
+
+  return true;
+}
+
 function renderAccessPending(){
   setSession(null);
   history.replaceState({}, '', '/login');
@@ -294,12 +338,19 @@ async function startApp(){
     redirectToLogin('session_expired');
     return;
   }
+  if(!enforceRouteForSession(s)){
+    renderLogin();
+    return;
+  }
   if(!await restoreAuthSession(s)){
     setSession(null);
     redirectToLogin('session_expired');
     return;
   }
   currentUserEmail = s.user ? s.user.email : '';
+  if(getPathname() === '/login' || getPathname() === '/'){
+    history.replaceState(null, '', '/dashboard');
+  }
   bindInactivityTracking();
   setInterval(() => {
     if(hasSessionExpiredFromInactivity()){
@@ -314,9 +365,13 @@ async function startApp(){
     if(e.code === 'ACCESS_PENDING'){ renderAccessPending(); return; }
     const msg = String(e && e.message || '');
     if(msg.includes('Could not load your access') || msg.includes('Could not validate your branch access') || msg.includes('no branch access')){
+      setSession(null);
+      history.replaceState(null, '', '/login');
       renderLogin();
       return;
     }
+    setSession(null);
+    history.replaceState(null, '', '/login');
     renderLogin(msg || 'Your session expired — please sign in again.');
     return;
   }
@@ -342,6 +397,11 @@ window.addEventListener('unhandledrejection', (e)=>{
 });
 
 (async function boot(){
+  const routePath = getPathname();
+  if(routePath !== '/login' && routePath !== '/' && routePath !== '/dashboard' && !routePath.startsWith('/api')){
+    history.replaceState(null, '', '/login');
+  }
+
   // Both password-recovery and signup-confirmation links land here with
   // tokens in the URL fragment — Supabase's own hosted verification
   // already confirmed the link is genuine before handing back the token.
@@ -380,8 +440,24 @@ window.addEventListener('unhandledrejection', (e)=>{
       redirectToLogin('session_expired');
       return;
     }
+    if(routePath === '/login' || routePath === '/'){
+      history.replaceState(null, '', '/dashboard');
+    }
     await startApp();
   } else {
-    redirectToLogin('signed_out');
+    if(routePath !== '/login') redirectToLogin('signed_out');
+    else renderLogin();
   }
 })();
+
+window.addEventListener('popstate', () => {
+  const s = getSession();
+  if(!s && getPathname() !== '/login'){
+    history.replaceState(null, '', '/login');
+    renderLogin();
+    return;
+  }
+  if(s && (getPathname() === '/' || getPathname() === '/login')){
+    history.replaceState(null, '', '/dashboard');
+  }
+});
