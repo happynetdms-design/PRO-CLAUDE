@@ -1,5 +1,12 @@
 /* --- Login (split screen) --- */
-.login-wrap{min-height:100vh; display:flex; background:#0b1726; color:var(--ink);}
+.login-wrap{
+  min-height:100vh;
+  display:flex;
+  background:#0b1726;
+  color:var(--ink);
+  overflow-y:auto;
+  overflow-x:hidden;
+}
 .login-hero{
   flex:1 1 56%; position:relative; overflow:hidden; padding:52px 7vw 42px 6vw;
   display:flex; flex-direction:column; justify-content:space-between;
