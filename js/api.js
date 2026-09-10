@@ -36,6 +36,40 @@ async function apiFetch(path, options = {}, retried = false){
 }
 
 // 1. Session & Access
+async function getCurrentUserIdentity(){
+  try{
+    const { data: { user }, error } = await supabaseClient.auth.getUser();
+    if(error || !user) return null;
+    return user;
+  }catch(error){
+    return null;
+  }
+}
+
+async function ensureCurrentUserProfile(user){
+  if(!user || !user.id) return;
+  const fallbackName = user.user_metadata && user.user_metadata.full_name
+    ? String(user.user_metadata.full_name).trim()
+    : (user.email ? user.email.split('@')[0] : '');
+  if(!fallbackName) return;
+
+  try{
+    const { data: profile } = await supabaseClient
+      .from('user_profiles')
+      .select('full_name')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if(profile && profile.full_name) return;
+
+    await supabaseClient
+      .from('user_profiles')
+      .upsert({ user_id: user.id, full_name: fallbackName }, { onConflict: 'user_id' });
+  }catch(error){
+    console.warn('Could not ensure user profile row:', error);
+  }
+}
+
 async function apiGetMe() {
   const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
   if (authError || !user) return {
@@ -47,13 +81,20 @@ async function apiGetMe() {
   };
 
   try {
+    await ensureCurrentUserProfile(user);
     const access = await resolveUserAccess(user);
     const accessData = access.grants[0];
+    const { data: profile } = await supabaseClient
+      .from('user_profiles')
+      .select('full_name')
+      .eq('user_id', user.id)
+      .maybeSingle();
 
     return {
       user: {
         ...user,
-        ...(accessData || {})
+        ...(accessData || {}),
+        full_name: profile?.full_name || user.user_metadata?.full_name || user.email || null
       },
       is_head_office: access.grants.some(grant => grant.role === 'owner' || grant.role === 'finance_manager'),
       access_pending: access.pending,
@@ -157,9 +198,18 @@ async function apiList(path, branchId, extraQuery = {}) {
 
 async function apiCreate(path, body) {
   const table = getTableName(path);
+  const currentUser = await getCurrentUserIdentity();
+  const timestamp = new Date().toISOString();
+  const payload = { ...body };
+  if(table === 'revenue_entries' || table === 'expenses' || table === 'loans' || table === 'loan_payments' || table === 'tax_obligations'){
+    payload.created_by = payload.created_by || (currentUser && currentUser.id) || null;
+    payload.updated_by = payload.updated_by || (currentUser && currentUser.id) || null;
+    payload.created_at = payload.created_at || timestamp;
+    payload.updated_at = payload.updated_at || timestamp;
+  }
   const { data, error } = await supabaseClient
     .from(table)
-    .insert(body)
+    .insert(payload)
     .select()
     .single();
 
@@ -171,9 +221,16 @@ async function apiUpdate(path, body) {
   const table = getTableName(path);
   if (!body.id) throw new Error('Update requires an id field');
 
+  const currentUser = await getCurrentUserIdentity();
+  const payload = { ...body };
+  if(table === 'revenue_entries' || table === 'expenses' || table === 'loans' || table === 'loan_payments' || table === 'tax_obligations'){
+    payload.updated_by = payload.updated_by || (currentUser && currentUser.id) || null;
+    payload.updated_at = payload.updated_at || new Date().toISOString();
+  }
+
   const { data, error } = await supabaseClient
     .from(table)
-    .update(body)
+    .update(payload)
     .eq('id', body.id)
     .select()
     .single();

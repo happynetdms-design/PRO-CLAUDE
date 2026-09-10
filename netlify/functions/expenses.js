@@ -73,7 +73,7 @@ exports.handler = async (event) => {
         const payload = {
           ...(r.id ? { id: r.id } : {}),
           branch_id: branchId,
-          expense_date: r.expense_date,
+          expense_date: r.expense_date || new Date().toISOString().slice(0,10),
           txn_ref: r.txn_ref || null,
           account_id: accountId,
           category_id: categoryId,
@@ -85,7 +85,10 @@ exports.handler = async (event) => {
           owner_funded: !!r.owner_funded,
           status: roleAllows(ctx.role, 'approve') ? (r.status || 'posted') : 'pending_approval',
           source: r.source || 'manual',
-          created_by: ctx.user.id
+          created_by: ctx.user.id,
+          created_at: new Date().toISOString(),
+          updated_by: ctx.user.id,
+          updated_at: new Date().toISOString()
         };
         const { data, error } = await admin.from('expenses').insert(payload).select().maybeSingle();
         if(error){
@@ -133,6 +136,7 @@ exports.handler = async (event) => {
         patch.approved_by = ctx.user.id;
         patch.approved_at = new Date().toISOString();
       }
+      patch.updated_by = ctx.user.id;
       patch.updated_at = new Date().toISOString();
 
       const { data, error } = await admin
@@ -148,7 +152,7 @@ exports.handler = async (event) => {
       if(!body.id) return json(400, { error: 'id is required.' });
       const { data, error } = await admin
         .from('expenses')
-        .update({ is_deleted: true, updated_at: new Date().toISOString() })
+        .update({ is_deleted: true, updated_by: ctx.user.id, updated_at: new Date().toISOString() })
         .eq('id', body.id).eq('branch_id', branchId)
         .select().maybeSingle();
       if(error) return json(500, { error: error.message });

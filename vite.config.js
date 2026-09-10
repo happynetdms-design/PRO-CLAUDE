@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { loadEnv } = require('vite');
+const { createLogger, loadEnv } = require('vite');
 
 const functionsDir = path.resolve(__dirname, 'netlify/functions');
 const runtimeScriptsDir = path.resolve(__dirname, 'js');
@@ -12,6 +12,16 @@ function copyRuntimeScripts(){
       fs.cpSync(runtimeScriptsDir, path.resolve(__dirname, 'dist/js'), { recursive:true });
     }
   };
+}
+
+function buildLogger(){
+  const logger = createLogger();
+  const originalWarn = logger.warn.bind(logger);
+  logger.warn = (message, options) => {
+    if(message.includes("can't be bundled without type=\"module\" attribute")) return;
+    originalWarn(message, options);
+  };
+  return logger;
 }
 
 function readBody(req){
@@ -81,5 +91,5 @@ module.exports = ({ mode }) => {
   process.env.SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   process.env.SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
   process.env.URL = process.env.URL || 'http://localhost:4173';
-  return { plugins: [localApi(), copyRuntimeScripts()] };
+  return { customLogger: buildLogger(), plugins: [localApi(), copyRuntimeScripts()] };
 };

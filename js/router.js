@@ -1,12 +1,128 @@
 /* ---------------- Router / render ---------------- */
 
+const ROUTES = {
+  '/': { viewId:'view-dashboard', tab:'dashboard' },
+  '/dashboard': { viewId:'view-dashboard', tab:'dashboard' },
+  '/executive': { viewId:'view-executive', tab:'executive' },
+  '/daily-entry': { viewId:'view-revenue', tab:'daily' },
+  '/expenses': { viewId:'view-expenses', tab:'expenses' },
+  '/suppliers-and-bills': { viewId:'view-bills', tab:'bills' },
+  '/bills': { viewId:'view-bills', tab:'bills', alias:true },
+  '/debt': { viewId:'view-loans', tab:'debt' },
+  '/tax': { viewId:'view-tax', tab:'tax' },
+  '/statements': { viewId:'view-statements', tab:'statements' },
+  '/reconciliation': { viewId:'view-reconciliation', tab:'reconcile' },
+  '/profile': { viewId:'view-profile', tab:'profile' },
+  '/settings': { viewId:'view-settings', tab:'settings' },
+  '/archive': { viewId:'view-archive', tab:'archive' },
+  '/assistant': { viewId:'view-assistant', tab:'assistant' },
+  '/staff': { viewId:'view-staff', tab:'staff' },
+  '/audit': { viewId:'view-audit', tab:'audit' },
+  '/login': { viewId:'view-login', tab:null }
+};
+const TAB_PATHS = Object.keys(ROUTES).reduce((paths, path) => {
+  const route = ROUTES[path];
+  if(route.tab && !route.alias && !paths[route.tab]) paths[route.tab] = path;
+  return paths;
+}, {});
+let returnPathAfterLogin = null;
+
+function normalizePath(path){
+  const pathname = String(path || '/').split('?')[0].split('#')[0];
+  if(pathname === '/') return '/';
+  return pathname.replace(/\/+$/, '') || '/';
+}
+
+function pathFromLink(link){
+  if(!link) return '/';
+  try{
+    return normalizePath(new URL(link.getAttribute('href') || '/', document.baseURI).pathname);
+  }catch(e){
+    return normalizePath(link.getAttribute('href'));
+  }
+}
+
+function routeFor(path){ return ROUTES[normalizePath(path)] || ROUTES['/']; }
+
+function rememberReturnPath(){
+  const path = normalizePath(window.location.pathname);
+  if(path !== '/login' && ROUTES[path] && ROUTES[path].tab) returnPathAfterLogin = path;
+}
+
+function consumeReturnPath(){
+  const path = returnPathAfterLogin || '/dashboard';
+  returnPathAfterLogin = null;
+  return path;
+}
+
+function setActiveRouteLinks(path){
+  const normalizedPath = normalizePath(path);
+  const currentRoute = routeFor(normalizedPath);
+  document.querySelectorAll('a[data-link]').forEach(link => {
+    link.classList.remove('active');
+    const linkRoute = routeFor(pathFromLink(link));
+    const isActive = linkRoute.tab && linkRoute.tab === currentRoute.tab;
+    if(isActive) link.classList.add('active');
+  });
+}
+
+function renderRoute(path){
+  const normalizedPath = normalizePath(path);
+  const route = routeFor(normalizedPath);
+  document.querySelectorAll('.view-section').forEach(section => { section.hidden = true; });
+  const section = document.getElementById(route.viewId);
+  if(section) section.hidden = false;
+  setActiveRouteLinks(normalizedPath);
+  if(route.tab && typeof state !== 'undefined' && state && activeTab !== route.tab) activeTab = route.tab;
+  return route;
+}
+
+function renderCurrentRoute(){
+  const route = renderRoute(window.location.pathname);
+  if(route.viewId === 'view-login' && typeof state !== 'undefined' && state){
+    renderLogin();
+    return;
+  }
+  if(route.tab && typeof state !== 'undefined' && state) render();
+}
+
+function navigateTo(path){
+  const normalizedPath = normalizePath(path);
+  const currentPath = normalizePath(window.location.pathname);
+  if(normalizedPath === currentPath) return;
+  const route = routeFor(normalizedPath);
+  const commitNavigation = () => {
+    if(normalizePath(window.location.pathname) !== normalizedPath) window.history.pushState({}, '', normalizedPath);
+    renderCurrentRoute();
+    window.scrollTo(0, 0);
+  };
+  if(formIsDirty){
+    confirmDialog('You have unsaved changes on this page. Leave without saving?').then(ok => {
+      if(ok){ formIsDirty = false; commitNavigation(); }
+    });
+    return;
+  }
+  if(route.tab || normalizedPath === '/login') commitNavigation();
+}
+
+document.body.addEventListener('click', event => {
+  const target = event.target instanceof Element ? event.target : null;
+  const link = target && target.closest('a[data-link]');
+  if(!link) return;
+  event.preventDefault();
+  navigateTo(pathFromLink(link));
+});
+window.addEventListener('popstate', () => {
+  renderCurrentRoute();
+});
+
 const TABS = [
   {id:'dashboard', label:'Dashboard', icon:'dashboard', section:'Core'},
   {id:'executive', label:'Executive Dashboard', icon:'target', headOfficeOnly:true, section:'Core'},
 
   {id:'daily', label:'Daily Entry', icon:'calendar', section:'Financial Data'},
   {id:'expenses', label:'Expenses', icon:'receipt', section:'Financial Data'},
-  {id:'bills', label:'Suppliers & Bills', icon:'briefcase', section:'Financial Data'},
+  {id:'bills', label:'Suppliers and Bills', icon:'briefcase', section:'Financial Data'},
   {id:'debt', label:'Debt Payoff', icon:'trendDown', section:'Financial Data'},
   {id:'tax', label:'Tax Calendar', icon:'landmark', section:'Financial Data'},
 
@@ -18,6 +134,7 @@ const TABS = [
 
   {id:'staff', label:'Staff & Access', icon:'handshake', headOfficeOnly:true, section:'Administration'},
   {id:'audit', label:'Audit Log', icon:'history', headOfficeOnly:true, section:'Administration'},
+  {id:'profile', label:'Profile', icon:'user', section:'Administration'},
   {id:'settings', label:'Settings', icon:'gear', section:'Administration'},
 ];
 const TAB_SECTIONS = ['Core','Financial Data','Analysis & Reports','Intelligence','Administration'];
@@ -54,7 +171,14 @@ function setTab(id){
   setTabConfirmed(id);
 }
 function setTabConfirmed(id){
-  activeTab = id; flashError=''; render(); window.scrollTo(0,0);
+  activeTab = id; flashError='';
+  const path = TAB_PATHS[id] || '/dashboard';
+  if(normalizePath(window.location.pathname) !== path) window.history.pushState({}, '', path);
+  renderCurrentRoute(); window.scrollTo(0,0);
+  loadTabData(id);
+}
+
+function loadTabData(id){
   if(id==='dashboard' && !alertsState.alerts && !alertsState.loading) loadAlerts();
   if(id==='executive' && state.isHeadOffice && !executiveState.data && !executiveState.loading) loadExecutive();
   if(id==='executive' && state.isHeadOffice && !decisionQueueState.decisions) loadDecisionQueue();
@@ -260,6 +384,10 @@ async function withButtonLock(btn, asyncFn){
 
 function render(){
   const r = root();
+  const previousSidebar = r.querySelector('.sidebar');
+  const sidebarScrollTop = previousSidebar ? previousSidebar.scrollTop : 0;
+  const currentPath = normalizePath(window.location.pathname);
+  const currentRoute = renderRoute(currentPath);
   let d = null;
   try{ d = dashboardData(); }catch(e){ d = null; }
   const tabs = visibleTabs();
@@ -285,7 +413,7 @@ function render(){
         <nav>${TAB_SECTIONS.map(section=>{
           const sectionTabs = tabs.filter(t=>t.section===section);
           if(!sectionTabs.length) return '';
-          return `<div class="nav-section"><div class="nav-section-label">${section}</div>${sectionTabs.map(t=>`<button data-tab="${t.id}" class="${activeTab===t.id?'active':''}">${ic(t.icon,17)}<span>${t.label}</span>${t.id==='audit' && syncHealthState.count>0 ? `<span class="tag alert" style="margin-left:auto; padding:1px 7px;" title="${syncHealthState.count} unresolved ledger sync issue(s)">${syncHealthState.count}</span>` : ''}</button>`).join('')}</div>`;
+          return `<div class="nav-section"><div class="nav-section-label">${section}</div>${sectionTabs.map(t=>{ const href = TAB_PATHS[t.id] || '/dashboard'; const isActive = routeFor(normalizePath(href)).tab === currentRoute.tab; return `<a href="${href}" data-link class="sidebar-nav-link ${isActive?'active':''}">${ic(t.icon,17)}<span>${t.label}</span>${t.id==='audit' && syncHealthState.count>0 ? `<span class="tag alert" style="margin-left:auto; padding:1px 7px;" title="${syncHealthState.count} unresolved ledger sync issue(s)">${syncHealthState.count}</span>` : ''}</a>`;}).join('')}</div>`;
         }).join('')}</nav>
 
         <div class="sidebar-widget">
@@ -312,11 +440,10 @@ function render(){
           </div>
         </div>
       </div>
-      <div class="main" id="main"></div>
+      <div class="main view-section" id="${currentRoute.viewId}"></div>
     </div>
-    <div class="mobile-tabs no-print">${tabs.map(t=>`<button data-tab="${t.id}" class="${activeTab===t.id?'active':''}">${t.label}</button>`).join('')}</div>
+    <div class="mobile-tabs no-print">${tabs.map(t=>{ const href = TAB_PATHS[t.id] || '/dashboard'; const isActive = routeFor(normalizePath(href)).tab === currentRoute.tab; return `<a href="${href}" data-link class="sidebar-nav-link ${isActive?'active':''}">${t.label}</a>`;}).join('')}</div>
   `;
-  r.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', ()=>setTab(b.dataset.tab)));
   const branchSelect = document.getElementById('branch-select');
   if(branchSelect) branchSelect.addEventListener('change', ()=>{
     const newValue = branchSelect.value;
@@ -335,8 +462,17 @@ function render(){
   if(themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
   const signOutBtn = document.getElementById('btn-sign-out');
   if(signOutBtn) signOutBtn.addEventListener('click', async ()=>{ await apiLogout(); location.reload(); });
+  const sidebar = r.querySelector('.sidebar');
+  if(sidebar){
+    const restoreSidebarScroll = () => {
+      sidebar.scrollTop = Math.min(sidebarScrollTop, Math.max(0, sidebar.scrollHeight - sidebar.clientHeight));
+    };
+    restoreSidebarScroll();
+    requestAnimationFrame(restoreSidebarScroll);
+  }
   renderSaveBadge();
   renderMain();
+  renderRoute(window.location.pathname);
 }
 
 // A broken view function shouldn't leave the whole tab blank with no way
@@ -349,7 +485,7 @@ function renderMain(){
     renderMainUnsafe();
   }catch(e){
     console.error('Error rendering the current tab:', e);
-    const m = document.getElementById('main');
+    const m = document.querySelector('.view-section:not([hidden])');
     if(m){
       m.innerHTML = `
         <div class="card" style="max-width:520px; margin-top:40px;">
@@ -363,7 +499,7 @@ function renderMain(){
   }
 }
 function renderMainUnsafe(){
-  const m = document.getElementById('main');
+  const m = document.querySelector('.view-section:not([hidden])');
   if(activeTab==='dashboard') m.innerHTML = viewDashboard();
   if(activeTab==='daily') m.innerHTML = viewDaily();
   if(activeTab==='expenses') m.innerHTML = viewExpenses();
@@ -377,6 +513,7 @@ function renderMainUnsafe(){
   if(activeTab==='executive') m.innerHTML = state.isHeadOffice ? viewExecutive() : viewDashboard();
   if(activeTab==='staff') m.innerHTML = state.isHeadOffice ? viewStaff() : viewDashboard();
   if(activeTab==='audit') m.innerHTML = state.isHeadOffice ? viewAudit() : viewDashboard();
+  if(activeTab==='profile') m.innerHTML = viewProfile();
   if(activeTab==='settings') m.innerHTML = viewSettings();
   wireTab();
   if(activeTab==='staff' && state.isHeadOffice) wireStaffTab();
@@ -500,3 +637,5 @@ function renderMainUnsafe(){
 }
 
 /* ---------------- DASHBOARD ---------------- */
+
+renderRoute(window.location.pathname);

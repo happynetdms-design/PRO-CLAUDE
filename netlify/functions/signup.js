@@ -30,7 +30,7 @@ exports.handler = async (event) => {
     const { data, error } = await anon.auth.signUp({
       email, password,
       options: {
-        emailRedirectTo: siteUrl + '/',
+        emailRedirectTo: siteUrl + '/?verified=1',
         data: full_name ? { full_name } : undefined
       }
     });

@@ -136,7 +136,7 @@ function viewBills(){
   (aging||[]).forEach(a => { agingTotals[a.aging_bucket] = (agingTotals[a.aging_bucket]||0) + Number(a.outstanding_kes); });
 
   return `
-    <div class="topbar"><div><h1>Suppliers &amp; Bills</h1><div class="sub">Accounts Payable — bill, approve, pay, track aging. Posts real double-entry to the ledger on approval and payment.</div></div></div>
+    <div class="topbar"><div><h1>Suppliers and Bills</h1><div class="sub">Accounts Payable — bill, approve, pay, track aging. Posts real double-entry to the ledger on approval and payment.</div></div></div>
 
     ${loading && !bills ? `<div class="card"><span class="hint">Loading…</span></div>` : ''}
     ${error ? `<div class="card"><div class="hint" style="color:#c0392b;">${error}</div></div>` : ''}

@@ -1,5 +1,10 @@
 /* ---------------- Event wiring ---------------- */
 
+function defaultDateValue(value){
+  const clean = String(value || '').trim();
+  return clean || todayISO();
+}
+
 function wireTab(){
   wirePaginationControls();
   wireSortableHeaders();
@@ -26,6 +31,95 @@ function wireTab(){
   const btnRefreshSyncHealth = document.getElementById('btn-refresh-sync-health');
   if(btnRefreshSyncHealth) btnRefreshSyncHealth.addEventListener('click', loadSyncErrors);
 
+  const dailyEntryDateField = document.getElementById('daily-entry-date-filter');
+  if(dailyEntryDateField){
+    dailyEntryDateField.addEventListener('change', e => {
+      window.dailyEntryDateFilter = e.target.value || '';
+      render();
+    });
+  }
+  const clearDailyFilterBtn = document.getElementById('btn-clear-daily-date-filter');
+  if(clearDailyFilterBtn) clearDailyFilterBtn.addEventListener('click', () => {
+    window.dailyEntryDateFilter = '';
+    render();
+  });
+  const revenueGroupFilter = document.getElementById('revenue-group-filter');
+  if(revenueGroupFilter){
+    revenueGroupFilter.addEventListener('change', e => {
+      window.revenueGroupFilter = e.target.value || 'all';
+      render();
+    });
+  }
+  const revenueSearchInput = document.getElementById('revenue-search');
+  if(revenueSearchInput){
+    revenueSearchInput.addEventListener('input', e => {
+      window.revenueSearchTerm = e.target.value || '';
+      render();
+    });
+  }
+  const allRevenueVisibleToggle = document.getElementById('select-all-revenue-visible');
+  if(allRevenueVisibleToggle){
+    allRevenueVisibleToggle.addEventListener('change', () => {
+      const rows = filteredRevenueRows(revenueForMonth(currentOpenMonth()).slice().sort((a,b)=>a.date<b.date?-1:1));
+      if(allRevenueVisibleToggle.checked){
+        rows.forEach(r => selectedRevenueIds.add(r.id));
+      } else {
+        rows.forEach(r => selectedRevenueIds.delete(r.id));
+      }
+      render();
+    });
+  }
+  const allRevenueHiddenToggle = document.getElementById('select-all-revenue-hidden');
+  if(allRevenueHiddenToggle){
+    allRevenueHiddenToggle.addEventListener('change', () => {
+      const rows = filteredRevenueRows(revenueForMonth(currentOpenMonth()).slice().sort((a,b)=>a.date<b.date?-1:1));
+      if(allRevenueHiddenToggle.checked){
+        rows.forEach(r => selectedRevenueIds.add(r.id));
+      } else {
+        rows.forEach(r => selectedRevenueIds.delete(r.id));
+      }
+      render();
+    });
+  }
+  document.querySelectorAll('.revenue-row-select').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.revenueSelect;
+      if(cb.checked) selectedRevenueIds.add(id); else selectedRevenueIds.delete(id);
+      render();
+    });
+  });
+  const editSelectedRevenueBtn = document.getElementById('btn-edit-selected-revenue');
+  if(editSelectedRevenueBtn){
+    editSelectedRevenueBtn.addEventListener('click', () => {
+      const ids = Array.from(selectedRevenueIds);
+      if(!ids.length) return;
+      const firstId = ids[0];
+      editingRevenueId = firstId;
+      render();
+    });
+  }
+  const exportSelectedRevenueBtn = document.getElementById('btn-export-selected-revenue');
+  if(exportSelectedRevenueBtn){
+    exportSelectedRevenueBtn.addEventListener('click', () => {
+      const rows = state.dailyRevenue.filter(r => selectedRevenueIds.has(r.id));
+      const csv = toCsv(
+        ['Date','Source','Revenue (KES)','Notes','Created by','Created at','Updated by','Updated at'],
+        rows.map(r => [r.date, revenueSourceLabel(r.source), r.revenue_kes, r.notes || '', r.created_by_name || r.created_by || '', r.created_at || '', r.updated_by_name || r.updated_by || '', r.updated_at || ''])
+      );
+      downloadText(`happynet-revenue-selected-${todayISO()}.csv`, csv);
+    });
+  }
+  const deleteSelectedRevenueBtn = document.getElementById('btn-delete-selected-revenue');
+  if(deleteSelectedRevenueBtn){
+    deleteSelectedRevenueBtn.addEventListener('click', () => {
+      if(!selectedRevenueIds.size) return;
+      const ids = Array.from(selectedRevenueIds);
+      state.dailyRevenue = state.dailyRevenue.filter(r => !ids.includes(r.id));
+      selectedRevenueIds.clear();
+      queueSave(); render();
+    });
+  }
+
   const btnScanAlerts = document.getElementById('btn-scan-alerts');
   if(btnScanAlerts) btnScanAlerts.addEventListener('click', scanForAlerts);
   document.querySelectorAll('[data-dismiss-alert]').forEach(b=>b.addEventListener('click',()=>dismissAlert(b.dataset.dismissAlert)));
@@ -37,19 +131,33 @@ function wireTab(){
     e.preventDefault();
     clearFormDirty();
     const fdata = new FormData(fd);
-    const date = fdata.get('date');
+    const date = defaultDateValue(fdata.get('date'));
     const revenue_kes = Number(fdata.get('revenue_kes'));
     const notes = fdata.get('notes')||'';
+    const source = String(fdata.get('source') || 'hotspot').toLowerCase();
     const errEl = document.getElementById('daily-err');
     if(state.closedMonths.includes(monthKey(date))){
       errEl.innerHTML = `<div class="err-msg">This date belongs to ${monthLabel(monthKey(date))}, which is already closed.</div>`; return;
     }
     if(editingRevenueId){
       const rec = state.dailyRevenue.find(r=>r.id===editingRevenueId);
-      if(rec){ rec.date=date; rec.revenue_kes=revenue_kes; rec.notes=notes; }
+      if(rec){
+        rec.date=date;
+        rec.revenue_kes=revenue_kes;
+        rec.notes=notes;
+        rec.source=source;
+        rec.updated_by = currentUserId || rec.updated_by;
+        rec.updated_by_name = currentUserFullName || rec.updated_by_name || currentUserEmail || 'Unknown user';
+      }
       editingRevenueId = null;
     } else {
-      state.dailyRevenue.push({id:uid(), date, revenue_kes, notes});
+      state.dailyRevenue.push({
+        id:uid(), date, revenue_kes, notes, source,
+        created_by: currentUserId,
+        created_by_name: currentUserFullName || currentUserEmail || 'Unknown user',
+        updated_by: currentUserId,
+        updated_by_name: currentUserFullName || currentUserEmail || 'Unknown user'
+      });
     }
     queueSave(); render();
   });
@@ -74,7 +182,7 @@ function wireTab(){
     clearFormDirty();
     docIntelState = { loading:false, result:null, error:null }; // clear so the next "log an expense" starts fresh
     const fdata = new FormData(fe);
-    const date = fdata.get('date');
+    const date = defaultDateValue(fdata.get('date'));
     const txn_ref = (fdata.get('txn_ref')||'').trim();
     const errEl = document.getElementById('expense-err');
     if(state.closedMonths.includes(monthKey(date))){

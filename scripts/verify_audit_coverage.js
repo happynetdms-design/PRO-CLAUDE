@@ -1,6 +1,21 @@
 // Mirrors audit_row_change()'s action-classification logic using plain
 // JS objects standing in for jsonb rows. Run with plain `node`.
 
+function normalizeEntryDate(value){
+  if(value && String(value).trim()) return String(value).trim();
+  return new Date().toISOString().slice(0,10);
+}
+
+function buildAuditMeta(userId, opts = {}){
+  const now = opts.now || new Date().toISOString();
+  return {
+    created_at: opts.created_at || now,
+    created_by: opts.created_by || userId || null,
+    updated_at: opts.updated_at || now,
+    updated_by: opts.updated_by || userId || null
+  };
+}
+
 function classifyAction(tgOp, oldRow, newRow){
   if(tgOp === 'INSERT') return 'insert';
   const hasIsDeleted = Object.prototype.hasOwnProperty.call(newRow, 'is_deleted');
@@ -16,6 +31,17 @@ function check(label, actual, expected){
   console.log(`${ok ? 'PASS' : 'FAIL'} — ${label}: got '${actual}', expected '${expected}'`);
   if(!ok) failed = true;
 }
+
+console.log('=== Daily-entry date normalization ===');
+check('blank date defaults to today', normalizeEntryDate(''), new Date().toISOString().slice(0,10));
+check('explicit date is preserved', normalizeEntryDate('2026-09-09'), '2026-09-09');
+console.log('');
+
+console.log('=== Audit metadata defaults ===');
+check('created_by is set from user', buildAuditMeta('user-123').created_by, 'user-123');
+check('updated_by mirrors the actor', buildAuditMeta('user-123').updated_by, 'user-123');
+check('created_at and updated_at are both present', Boolean(buildAuditMeta('user-123').created_at && buildAuditMeta('user-123').updated_at), true);
+console.log('');
 
 console.log('=== Tables WITH is_deleted (revenue_entries, expenses, loans, bill_payments) ===');
 check('insert', classifyAction('INSERT', null, {is_deleted:false, amount:100}), 'insert');

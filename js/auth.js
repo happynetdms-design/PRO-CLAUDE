@@ -6,15 +6,18 @@ let loginResetMode = false;
 let resetMsg = null;
 let recoveryToken = null; // { accessToken, refreshToken } from a recovery link
 let recoveryMsg = null;
+let verificationMsg = null;
 
 function renderAccessPending(){
   setSession(null);
+  history.replaceState({}, '', '/login');
   renderLogin();
 }
 
 function renderRecovery(){
+  history.replaceState({}, '', '/login');
   root().innerHTML = `
-    <div class="login-wrap">
+    <div id="view-login" class="login-wrap view-section">
       <div class="login-hero">
         <div class="login-hero-rings"></div>
         <div class="login-hero-grid"></div>
@@ -73,8 +76,12 @@ function renderRecovery(){
 }
 
 function renderLogin(errMsg){
+  rememberReturnPath();
+  history.replaceState({}, '', '/login');
+  errMsg = errMsg || verificationMsg;
+  verificationMsg = null;
   root().innerHTML = `
-    <div class="login-wrap">
+    <div id="view-login" class="login-wrap view-section">
       <div class="login-hero">
         <div class="login-hero-rings"></div>
         <div>
@@ -298,8 +305,9 @@ async function startApp(){
     renderLogin(msg || 'Your session expired — please sign in again.');
     return;
   }
+  if(normalizePath(window.location.pathname) === '/login') history.replaceState({}, '', consumeReturnPath());
   render();
-  loadAlerts(); // default tab is Dashboard, which shows alerts — load once on boot
+  loadTabData(activeTab);
   checkSyncHealth(); // silent Head-Office-only check; surfaces as a sidebar badge only if something's actually wrong
 }
 
@@ -335,14 +343,20 @@ window.addEventListener('unhandledrejection', (e)=>{
       return;
     }
     if(token && refreshToken){
-      // A signup-confirmation link (or any other flow handing back a
-      // ready session) — sign them straight in rather than making a
-      // freshly-confirmed person land back at a bare login form.
-      const expiresAt = Number(params.get('expires_at')) || (Math.floor(Date.now()/1000) + 3600);
-      setSession({ access_token: token, refresh_token: refreshToken, expires_at: expiresAt, user: {} }, true);
-      await startApp();
+      // Email confirmation creates a temporary auth session in the URL. Do
+      // not carry it into the app: verified users must sign in themselves.
+      await apiLogout();
+      verificationMsg = 'Email verified. Please enter your email and password to sign in.';
+      renderLogin();
       return;
     }
+  }
+  if(new URLSearchParams(window.location.search).get('verified') === '1'){
+    history.replaceState(null, '', window.location.pathname);
+    await apiLogout();
+    verificationMsg = 'Email verified. Please enter your email and password to sign in.';
+    renderLogin();
+    return;
   }
   const s = getSession();
   if(s){ await startApp(); } else { renderLogin(); }

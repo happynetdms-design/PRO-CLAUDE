@@ -1,4 +1,22 @@
-/* ---------------- SETTINGS ---------------- */
+/* ---------------- PROFILE / SETTINGS ---------------- */
+
+function viewProfile(){
+  const userName = currentUserFullName || currentUserEmail || 'User';
+  return `
+    <div class="topbar"><div><h1>Profile</h1><div class="sub">Your account details and access summary.</div></div></div>
+    <div class="form-card">
+      <h3>Account</h3>
+      <div class="form-row">
+        <div><label>Full name</label><div class="big" style="font-size:18px;">${userName}</div></div>
+        <div><label>Email</label><div class="big" style="font-size:18px;">${currentUserEmail || '—'}</div></div>
+        <div><label>Role</label><div class="big" style="font-size:18px; text-transform:capitalize;">${state && state.role ? state.role.replace(/_/g,' ') : '—'}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sub">This profile is used for the Created by and Updated by fields on entries you create or edit.</div>
+    </div>
+  `;
+}
 
 function viewSettings(){
   const s = state.settings;

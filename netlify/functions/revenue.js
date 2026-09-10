@@ -42,10 +42,11 @@ exports.handler = async (event) => {
       for(const r of rows){
         const payload = {
           ...(r.id ? { id: r.id } : {}),
-          branch_id: branchId, entry_date: r.entry_date,
+          branch_id: branchId, entry_date: r.entry_date || new Date().toISOString().slice(0,10),
           account_id: r.account_id || null, category_id: r.category_id || null,
           amount_kes: r.amount_kes, notes: r.notes || null,
-          source: r.source || 'manual', created_by: ctx.user.id
+          source: r.source || 'manual', created_by: ctx.user.id, created_at: new Date().toISOString(),
+          updated_by: ctx.user.id, updated_at: new Date().toISOString()
         };
         const { data, error } = await admin.from('revenue_entries').insert(payload).select().maybeSingle();
         if(error){ skipped.push({ row: r, reason: error.message }); continue; }
@@ -59,6 +60,7 @@ exports.handler = async (event) => {
       const updatable = ['entry_date', 'account_id', 'category_id', 'amount_kes', 'notes'];
       const patch = {};
       for(const k of updatable) if(body[k] !== undefined) patch[k] = body[k];
+      patch.updated_by = ctx.user.id;
       patch.updated_at = new Date().toISOString();
 
       const { data, error } = await admin
@@ -74,7 +76,7 @@ exports.handler = async (event) => {
       if(!body.id) return json(400, { error: 'id is required.' });
       const { data, error } = await admin
         .from('revenue_entries')
-        .update({ is_deleted: true, updated_at: new Date().toISOString() })
+        .update({ is_deleted: true, updated_by: ctx.user.id, updated_at: new Date().toISOString() })
         .eq('id', body.id).eq('branch_id', branchId)
         .select().maybeSingle();
       if(error) return json(500, { error: error.message });

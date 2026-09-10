@@ -1,3 +1,7 @@
+let currentUserEmail = '';
+let currentUserFullName = '';
+let currentUserId = null;
+
 const KES = n => 'KES ' + Math.round(n||0).toLocaleString('en-KE');
 const KES0 = n => Math.round(n||0).toLocaleString('en-KE');
 // Generic client-side pagination — keyed per table so each list (Expenses,
@@ -381,35 +385,62 @@ let saveStatus = 'idle'; // idle | saving | saved | error
 const CORE_ENTITY_CONFIG = {
   dailyRevenue: {
     path: '/api/revenue',
-    toApi: r => ({ id:r.id, branch_id: state.branchId, entry_date:r.date, amount_kes:Number(r.revenue_kes)||0, notes:r.notes||null })
+    toApi: (r, actorId) => ({
+      id:r.id,
+      branch_id: state.branchId,
+      entry_date:r.date,
+      amount_kes:Number(r.revenue_kes)||0,
+      notes:r.notes||null,
+      source:(r.source || 'hotspot').toLowerCase(),
+      created_by: r.created_by || actorId || currentUserId || null,
+      updated_by: actorId || currentUserId || r.updated_by || null,
+      created_at: r.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
   },
   expenses: {
     path: '/api/expenses',
-    toApi: e => ({ id:e.id, branch_id: state.branchId, expense_date:e.date, txn_ref:e.txn_ref||null,
+    toApi: (e, actorId) => ({ id:e.id, branch_id: state.branchId, expense_date:e.date, txn_ref:e.txn_ref||null,
       account_name:e.account_used||null, category_name:e.category||null,
       description:e.description||null, paid_to:e.paid_to||null,
       amount_kes:Number(e.amount_kes)||0, charges_kes:Number(e.charges_kes)||0, owner_funded:!!e.owner_funded,
-      status:e.status||'posted' })
+      status:e.status||'posted',
+      created_by: e.created_by || actorId || currentUserId || null,
+      updated_by: actorId || currentUserId || e.updated_by || null,
+      created_at: e.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString() })
   },
   loans: {
     path: '/api/loans',
-    toApi: l => ({ id:l.id, branch_id: state.branchId, debt_name:l.debt_name, lender:l.lender||null,
+    toApi: (l, actorId) => ({ id:l.id, branch_id: state.branchId, debt_name:l.debt_name, lender:l.lender||null,
       original_principal_kes:Number(l.original_principal_kes)||0, current_balance_kes:Number(l.current_balance_kes)||0,
       annual_interest_rate_pct:Number(l.annual_interest_rate_pct)||0, start_date:l.start_date||null,
-      min_monthly_payment_kes:Number(l.min_monthly_payment_kes)||0, status:l.status||'ACTIVE' })
+      min_monthly_payment_kes:Number(l.min_monthly_payment_kes)||0, status:l.status||'ACTIVE',
+      created_by: l.created_by || actorId || currentUserId || null,
+      updated_by: actorId || currentUserId || l.updated_by || null,
+      created_at: l.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString() })
   },
   // Balance math (loan.current_balance_kes) is computed client-side, same
   // as this app already did — syncing the 'loans' array separately carries
   // that updated balance server-side, so this endpoint doesn't touch it.
   loanPayments: {
     path: '/api/loan-payments',
-    toApi: p => ({ id:p.id, loan_id:p.loan_id, payment_date:p.date, amount_kes:Number(p.amount_kes)||0, note:p.note||null })
+    toApi: (p, actorId) => ({ id:p.id, loan_id:p.loan_id, payment_date:p.date, amount_kes:Number(p.amount_kes)||0, note:p.note||null,
+      created_by: p.created_by || actorId || currentUserId || null,
+      updated_by: actorId || currentUserId || p.updated_by || null,
+      created_at: p.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString() })
   },
   taxObligations: {
     path: '/api/tax',
-    toApi: t => ({ id:t.id, branch_id: state.branchId, tax_type:t.tax_type, applicable:!!t.applicable,
+    toApi: (t, actorId) => ({ id:t.id, branch_id: state.branchId, tax_type:t.tax_type, applicable:!!t.applicable,
       frequency:t.frequency, due_day_of_month:t.due_day_of_month||null, manual_next_due_date:t.manual_next_due_date||null,
-      estimated_amount_kes:Number(t.estimated_amount_kes)||0, filing_authority:t.filing_authority||null, notes:t.notes||null })
+      estimated_amount_kes:Number(t.estimated_amount_kes)||0, filing_authority:t.filing_authority||null, notes:t.notes||null,
+      created_by: t.created_by || actorId || currentUserId || null,
+      updated_by: actorId || currentUserId || t.updated_by || null,
+      created_at: t.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString() })
   }
 };
 
@@ -427,13 +458,15 @@ async function syncEntityArray(key){
   const priorById = new Map(prior.map(x=>[x.id,x]));
   const currentIds = new Set(current.map(x=>x.id));
   const ops = [];
+  const actorId = currentUserId || (await getCurrentUserIdentity())?.id || null;
 
   for(const rec of current){
     const before = priorById.get(rec.id);
+    const payload = cfg.toApi(rec, actorId);
     if(!before){
-      ops.push(apiCreate(cfg.path, cfg.toApi(rec)));
+      ops.push(apiCreate(cfg.path, payload));
     } else if(JSON.stringify(before) !== JSON.stringify(rec)){
-      ops.push(apiUpdate(cfg.path, cfg.toApi(rec)));
+      ops.push(apiUpdate(cfg.path, payload));
     }
   }
   for(const rec of prior){
@@ -466,6 +499,8 @@ async function loadState(preferredBranchId){
     me = await apiGetMe();
   }
   currentUserEmail = me.user ? me.user.email : currentUserEmail; // always prefer the server-verified email over whatever the session object had
+  currentUserFullName = me.user && me.user.full_name ? me.user.full_name : currentUserEmail || currentUserFullName;
+  currentUserId = me.user ? me.user.id : currentUserId;
   if(!me.branches || me.branches.length === 0){
     const error = new Error('Your account has no branch access yet — ask an admin to grant you access.');
     error.code = me.access_pending ? 'ACCESS_PENDING' : 'ACCESS_UNAVAILABLE';
@@ -489,6 +524,23 @@ async function loadState(preferredBranchId){
     apiGetBranchMisc(branchId)
   ]);
 
+  const revenueUserIds = Array.from(new Set((revRes.revenue || [])
+    .map(r => r.created_by || r.updated_by)
+    .filter(Boolean)));
+  let userNames = {};
+  if(revenueUserIds.length){
+    const { data, error } = await supabaseClient
+      .from('user_profiles')
+      .select('user_id, full_name')
+      .in('user_id', revenueUserIds);
+    if(!error && Array.isArray(data)){
+      userNames = data.reduce((acc, profile) => {
+        acc[profile.user_id] = profile.full_name || 'Unknown user';
+        return acc;
+      }, {});
+    }
+  }
+
   const d = defaultState(); // used only as a fallback shape now, not seed data
 
   state = {
@@ -496,7 +548,14 @@ async function loadState(preferredBranchId){
     role: branch.role,
     isHeadOffice: !!me.is_head_office,
     allBranches: availableBranches,
-    dailyRevenue: (revRes.revenue || []).map(r => ({ id:r.id, date:r.entry_date, revenue_kes:Number(r.amount_kes), notes:r.notes || '' })),
+    dailyRevenue: (revRes.revenue || []).map(r => ({
+      id:r.id, date:r.entry_date, revenue_kes:Number(r.amount_kes), notes:r.notes || '',
+      source:(r.source || 'hotspot').toLowerCase(),
+      created_by:r.created_by || null, created_by_name:userNames[r.created_by] || 'Unknown user',
+      created_at:r.created_at || null,
+      updated_by:r.updated_by || null, updated_by_name:userNames[r.updated_by] || 'Unknown user',
+      updated_at:r.updated_at || null
+    })),
     expenses: (expRes.expenses || []).map(e => ({
       id:e.id, date:e.expense_date, txn_ref:e.txn_ref || '',
       account_used: (e.financial_accounts && e.financial_accounts.name) || '',

@@ -77,7 +77,7 @@ exports.handler = async (event) => {
       }
       const { data: payment, error: payErr } = await admin
         .from('bill_payments')
-        .insert({ bill_id, payment_date, amount_kes, account_id, reference: reference || null, created_by: ctx.user.id })
+        .insert({ bill_id, payment_date: payment_date || new Date().toISOString().slice(0,10), amount_kes, account_id, reference: reference || null, created_by: ctx.user.id, created_at: new Date().toISOString(), updated_by: ctx.user.id, updated_at: new Date().toISOString() })
         .select().maybeSingle();
       if(payErr) return json(500, { error: payErr.message });
 
@@ -98,9 +98,10 @@ exports.handler = async (event) => {
       const category_id = await resolveCategoryId(admin, branchId, category_name);
       const payload = {
         branch_id: branchId, supplier_id, invoice_number: invoice_number || null,
-        invoice_date, due_date: due_date || null, category_id,
+        invoice_date: invoice_date || new Date().toISOString().slice(0,10), due_date: due_date || null, category_id,
         subtotal_kes, tax_kes: tax, total_kes: Number(subtotal_kes) + Number(tax),
-        notes: notes || null, created_by: ctx.user.id
+        notes: notes || null, created_by: ctx.user.id, created_at: new Date().toISOString(),
+        updated_by: ctx.user.id, updated_at: new Date().toISOString()
       };
       const { data, error } = await admin.from('bills').insert(payload).select().maybeSingle();
       if(error){

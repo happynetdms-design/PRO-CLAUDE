@@ -50,17 +50,19 @@ input[type=checkbox]{width:auto; accent-color:var(--gold-deep);}
 
 .mobile-tabs{display:none;}
 @media (max-width: 880px){
+  body{overflow:auto;}
+  .app{height:auto; min-height:100vh; overflow:visible;}
   .sidebar{display:none;}
-  .main{padding:18px 16px 90px;}
+  .main{padding:18px 16px 90px; height:auto; overflow:visible;}
   .mobile-tabs{
     display:flex; position:fixed; bottom:0; left:0; right:0; background:var(--ink); z-index:50;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom)); overflow-x:auto; gap:2px;
   }
-  .mobile-tabs button{
+  .mobile-tabs button, .mobile-tabs .sidebar-nav-link{
     all:unset; flex:1; min-width:64px; text-align:center; color:#B7AE99; font-size:10.5px; font-weight:600;
     padding:8px 4px; border-radius:8px; cursor:pointer;
   }
-  .mobile-tabs button.active{background:var(--gold); color:var(--ink);}
+  .mobile-tabs button.active, .mobile-tabs .sidebar-nav-link.active{background:var(--gold); color:var(--ink);}
   .form-row{grid-template-columns:1fr 1fr;}
 }
 @media (max-width:520px){
